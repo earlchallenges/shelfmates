@@ -9,6 +9,20 @@
   const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const MONTH_ICONS = ["❄️","💘","🍀","🌷","🌼","☀️","🎆","🌻","🍂","🎃","🦃","🎄"];
 
+  // ---------- content ratings (Michael: say if a book has much swearing or is explicit) ----------
+  const CONTENT = [
+    { key: "", label: "Not rated", short: "" },
+    { key: "clean", label: "Clean", short: "Clean" },
+    { key: "mild", label: "Some swearing", short: "Some swearing" },
+    { key: "heavy", label: "Lots of swearing", short: "Lots of swearing" },
+    { key: "explicit", label: "Explicit", short: "Explicit" },
+  ];
+  const contentOf = (k) => CONTENT.find(c => c.key === (k || "")) || CONTENT[0];
+  const contentPill = (k) => { const c = contentOf(k); return c.key ? el("span", { class: "content " + c.key, title: "Content: " + c.label }, c.short) : null; };
+  const contentSelect = (item, onChange) => el("select", { class: "content-sel", title: "Content rating", onchange: (e) => onChange(e.target.value) }, ...CONTENT.map(c => el("option", { value: c.key, selected: (item.content || "") === c.key }, c.key ? c.label : "Content?")));
+  const NOTE_KINDS = [["quote", "Quote"], ["note", "Note"], ["thought", "Thought"], ["journal", "Journal entry"]];
+  const HELP_EMAIL = "joseph4freedom@gmail.com";
+
   // ---------- economy ----------
   const REWARD = {
     book:    { coins: 5,  xp: 10,  label: "new book" },
@@ -279,8 +293,9 @@
   function flushAwardToast() { const s = award._sum; award._sum = null; if (s && (s.coins || s.xp)) toast(`+${s.coins} coins · +${s.xp} XP`); updateTopbar(); }
 
   // ---------- auth ----------
-  async function signUp(username, password, displayName) {
+  async function signUp(username, password, displayName, agreed) {
     username = username.trim().toLowerCase();
+    if (!agreed) throw new Error("Please check the box to agree to the terms.");
     if (!/^[a-z0-9_]{3,20}$/.test(username)) throw new Error("Username: 3 to 20 letters, numbers, or underscores.");
     if (password.length < 6) throw new Error("Password needs at least 6 characters.");
     const { data, error } = await sb.auth.signUp({ email: username + EMAIL_DOMAIN, password });
@@ -288,7 +303,7 @@
     if (!data.session) throw new Error("Sign-up worked but no session came back. Ask Joseph to check the Supabase email setting.");
     session = data.session;
     const profile = { id: session.user.id, username, display_name: displayName.trim() || username, avatar: username[0].toUpperCase(),
-      categories: DEFAULT_CATEGORIES.map(name => ({ name, custom: false, books: [] })), coins: 20, coins_earned: 20, xp: 0, stats: {} };
+      categories: DEFAULT_CATEGORIES.map(name => ({ name, custom: false, books: [] })), coins: 20, coins_earned: 20, xp: 0, stats: {}, agreed_terms_at: new Date().toISOString() };
     const { error: e2 } = await sb.from("profiles").insert(profile);
     if (e2) throw new Error(e2.message);
   }
@@ -300,7 +315,7 @@
   async function signOut() { await sb.auth.signOut(); session = null; me = null; location.hash = "#/"; render(); }
 
   // ---------- data ----------
-  const PROFILE_PUBLIC = "id,username,display_name,tagline,avatar,accent,photo_url,banner,frame,xp,pet,categories,recommendations,badges,updated_at";
+  const PROFILE_PUBLIC = "id,username,display_name,tagline,avatar,accent,photo_url,banner,frame,xp,pet,categories,recommendations,badges,reading_log,updated_at";
   async function loadMe() {
     const { data, error } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
     if (error) throw error;
@@ -511,7 +526,7 @@
   }
 
   // ---------- routing ----------
-  const routes = { "": pageAuth, "/": pageAuth, "/shelf": pageShelf, "/friends": pageFriends, "/badges": pageBadges, "/card": pageCard, "/profile": pageProfile, "/history": pageHistory };
+  const routes = { "": pageAuth, "/": pageAuth, "/shelf": pageShelf, "/friends": pageFriends, "/badges": pageBadges, "/card": pageCard, "/profile": pageProfile, "/history": pageHistory, "/books": pageBooks, "/terms": pageTerms };
   function route() {
     const h = location.hash.replace(/^#/, "") || "/";
     if (h.startsWith("/u/")) return { fn: pageCard, arg: h.slice(3), key: h };
@@ -525,7 +540,7 @@
   async function render() {
     const main = $("#main"); const r = route();
     document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("active", "#" + r.key === a.getAttribute("href")));
-    if (!session) { $("#nav").hidden = true; $("#topbar-right").hidden = true; fill(main, pageAuth()); return; }
+    if (!session) { $("#nav").hidden = true; $("#topbar-right").hidden = true; fill(main, r.key === "/terms" ? pageTerms() : pageAuth()); return; }
     if (!me) {
       fill(main, el("div", { class: "loading" }, "Opening your shelf…"));
       try { await loadMe(); await loadFriends(); await checkBadges(); await dailyTouch(); await loadNotices(); }
@@ -564,15 +579,18 @@
       const user = el("input", { class: "input", placeholder: "username", autocomplete: "username", autocapitalize: "none" });
       const pass = el("input", { class: "input", type: "password", placeholder: "password", autocomplete: mode === "login" ? "current-password" : "new-password" });
       const name = el("input", { class: "input", placeholder: "What friends call you (e.g. Michael)" });
+      const agree = el("input", { type: "checkbox", id: "agree" });
       const form = el("form", { onsubmit: async (e) => {
         e.preventDefault(); err.textContent = ""; const b = form.querySelector("button[type=submit]"); b.disabled = true;
-        try { if (mode === "login") await signIn(user.value, pass.value); else await signUp(user.value, pass.value, name.value); me = null; location.hash = "#/shelf"; await render(); }
+        try { if (mode === "login") await signIn(user.value, pass.value); else await signUp(user.value, pass.value, name.value, agree.checked); me = null; location.hash = "#/shelf"; await render(); }
         catch (ex) { err.textContent = ex.message; b.disabled = false; }
       } },
         el("div", { class: "field" }, el("label", {}, "Username"), user),
         mode === "signup" ? el("div", { class: "field" }, el("label", {}, "Your name"), name) : null,
         el("div", { class: "field" }, el("label", {}, "Password"), pass,
-          mode === "signup" ? el("div", { class: "warn setup-note" }, el("b", {}, "Write your password down. "), "There's no reset by email. If you lose it, ask Joseph.") : null),
+          mode === "signup" ? el("div", { class: "warn setup-note" }, el("b", {}, "Write your password down. "), "There's no reset by email. If you lose it, email Joseph at ", el("a", { href: "mailto:" + HELP_EMAIL }, HELP_EMAIL), " and he'll reset it.") : null),
+        mode === "signup" ? el("label", { class: "agree-row", for: "agree" }, agree, el("span", {}, "I agree to the ", el("a", { href: "#/terms", target: "_blank" }, "terms"), ". Short version: only real books, and be decent.")) : null,
+        mode === "login" ? el("p", { class: "hint" }, "Forgot your password? Email Joseph at ", el("a", { href: "mailto:" + HELP_EMAIL }, HELP_EMAIL), " and he'll reset it.") : null,
         err,
         el("button", { class: "btn primary", type: "submit" }, mode === "login" ? "Open my shelf" : "Create my profile"),
       );
@@ -636,8 +654,9 @@
             el("span", { class: "rank" + (bi === 0 ? " top" : "") }, bi + 1),
             coverEl(b, true, (url) => { b.cover = url; markDirty(); drawShelf(); }),
             el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null),
-              el("div", { class: "author" }, kindPill(b, true, () => { b.kind = b.kind === "series" ? "book" : "series"; markDirty(); drawShelf(); }), b.author ? " " + b.author : "")),
+              el("div", { class: "author" }, kindPill(b, true, () => { b.kind = b.kind === "series" ? "book" : "series"; markDirty(); drawShelf(); }), contentSelect(b, (v) => { b.content = v; markDirty(); }), b.author ? " " + b.author : "")),
             el("div", { class: "tools" },
+              el("button", { class: "icon-btn", title: "Quotes, notes and journal for this book", onclick: () => openNotes(b.title, b.author) }, "📝"),
               el("button", { class: "icon-btn star" + (b.excited ? " on" : ""), title: "Most excited about this one", onclick: () => { const was = b.excited; books.forEach(x => x.excited = false); b.excited = !was; markDirty(); drawShelf(); } }, "★"),
               el("button", { class: "icon-btn", title: "Move up", disabled: bi === 0, onclick: () => { [books[bi - 1], books[bi]] = [books[bi], books[bi - 1]]; markDirty(); drawShelf(); } }, "↑"),
               el("button", { class: "icon-btn", title: "Move down", disabled: bi === books.length - 1, onclick: () => { [books[bi + 1], books[bi]] = [books[bi], books[bi + 1]]; markDirty(); drawShelf(); } }, "↓"),
@@ -663,7 +682,7 @@
       fill(recs,
         el("div", { class: "eyebrow" }, "For other readers"), el("h2", {}, "My recommendations"),
         el("p", { class: "muted small" }, `Up to ${MAX_PER_CATEGORY}. Friends can mark one as read and you both earn coins.`), el("div", { class: "sep" }),
-        ...list.map((r, i) => el("div", { class: "rec" }, coverEl(r, true, (url) => { r.cover = url; markDirty(); drawRecs(); }), el("div", {}, el("div", { class: "title" }, r.title, r.author ? el("small", { class: "muted" }, " · " + r.author) : null), el("div", { class: "row", style: "gap:6px;margin-top:2px" }, kindPill(r, true, () => { r.kind = r.kind === "series" ? "book" : "series"; markDirty(); drawRecs(); }), r.note ? el("span", { class: "note" }, r.note) : null)),
+        ...list.map((r, i) => el("div", { class: "rec" }, coverEl(r, true, (url) => { r.cover = url; markDirty(); drawRecs(); }), el("div", {}, el("div", { class: "title" }, r.title, r.author ? el("small", { class: "muted" }, " · " + r.author) : null), el("div", { class: "row", style: "gap:6px;margin-top:2px" }, kindPill(r, true, () => { r.kind = r.kind === "series" ? "book" : "series"; markDirty(); drawRecs(); }), contentSelect(r, (v) => { r.content = v; markDirty(); }), r.note ? el("span", { class: "note" }, r.note) : null)),
           el("button", { class: "icon-btn", title: "Remove", onclick: () => { list.splice(i, 1); markDirty(); drawRecs(); } }, "✕"))),
         list.length < MAX_PER_CATEGORY ? el("form", { class: "add-book rec-add", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) return; let cover = pendingCover; if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 500); } catch (ex) { toast("Picture didn't upload: " + ex.message); } } list.push({ id: uid(), title: t.value.trim(), author: a.value.trim(), note: n.value.trim(), kind, cover: cover || undefined }); markDirty(); drawRecs(); } }, twrap, a, n, el("div", { class: "row", style: "gap:6px" }, kindBtn, picBtn, addBtn)) : el("p", { class: "muted small" }, "That's 10. Remove one to add another."));
     }
@@ -704,7 +723,7 @@
       el("div", { class: "friend-top" }, avatarEl(p, "lg"), el("div", {}, el("div", { class: "name" }, p.display_name), el("div", { class: "handle" }, "@" + p.username + " · Lv " + levelOf(p.xp || 0) + (p.pet ? " · " + petEmoji(p.pet) + " Lv " + petLevelOf(p.pet.xp || 0) : "")),
         el("div", { class: "updated-ago" + (fresh ? " fresh" : "") }, badgeCount(p) + " badges · updated " + ago(p.updated_at)))),
       excited ? el("div", { class: "pick", style: "background:var(--rose-soft)" }, el("span", { class: "cat", style: "color:var(--rose)" }, "Most excited about"), el("span", { class: "t" }, excited.title), excited.author ? el("span", { class: "a" }, excited.author) : null) : null,
-      ...tops.map(t => el("div", { class: "pick" }, el("span", { class: "cat" }, "#1 " + t.cat + (t.kind === "series" ? " · series" : "")), el("span", { class: "t" }, t.title), t.author ? el("span", { class: "a" }, t.author) : null)),
+      ...tops.map(t => el("div", { class: "pick" }, el("span", { class: "cat" }, "#1 " + t.cat + (t.kind === "series" ? " · series" : "")), el("span", { class: "t" }, t.title, contentPill(t.content)), t.author ? el("span", { class: "a" }, t.author) : null)),
       !tops.length ? el("p", { class: "muted small" }, "Hasn't added books yet.") : null,
       el("span", { class: "more" }, "See full card →"));
   }
@@ -763,7 +782,14 @@
     if (mine || isFriend) {
       page.append(el("div", { class: "eyebrow", style: "margin-top:10px" }, mine ? "Everything on my shelf" : "Everything on their shelf"));
       page.append(...cats.map(c => el("section", { class: "category" }, el("div", { class: "category-head" }, el("h2", {}, c.name), el("span", { class: "count" }, c.books.length + " of 10")),
-        el("ul", { class: "books" }, ...c.books.map((b, i) => el("li", { class: "book" }, el("span", { class: "rank" + (i === 0 ? " top" : "") }, i + 1), coverEl(b, false), el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null), el("div", { class: "author" }, kindPill(b, false), b.author ? " " + b.author : "")), el("span")))))));
+        el("ul", { class: "books" }, ...c.books.map((b, i) => el("li", { class: "book" }, el("span", { class: "rank" + (i === 0 ? " top" : "") }, i + 1), coverEl(b, false), el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null), el("div", { class: "author" }, kindPill(b, false), contentPill(b.content), b.author ? " " + b.author : "")), el("span")))))));
+      // reading log + public notes
+      const log = p.reading_log || []; const yr = new Date().getFullYear(); const thisYear = log.filter(x => (x.finished || "").startsWith(String(yr)));
+      if (log.length) page.append(el("div", { class: "card" }, el("div", { class: "eyebrow" }, mine ? "My books" : p.display_name + "'s books"), el("h2", {}, `${thisYear.length} read in ${yr}`, el("small", { class: "muted" }, ` · ${log.length} all time`)),
+        el("div", { class: "log-mini" }, ...thisYear.slice(0, 12).map(x => el("span", { class: "log-chip" }, x.title, contentPill(x.content))), thisYear.length > 12 ? el("span", { class: "muted small" }, `+${thisYear.length - 12} more`) : null)));
+      const { data: pub } = await sb.from("notes").select("id,book_title,book_author,kind,body,public,created_at").eq("user_id", p.id).eq("public", true).order("created_at", { ascending: false }).limit(50);
+      if (pub && pub.length) page.append(el("div", { class: "card" }, el("div", { class: "eyebrow" }, mine ? "My public quotes & notes" : p.display_name + "'s quotes & notes"), el("div", { class: "sep" }),
+        ...pub.map(n => el("div", { class: "note-row" }, el("div", { class: "note-kind" }, NOTE_KINDS.find(k => k[0] === n.kind)?.[1] || "Note"), el("div", { class: "note-body" + (n.kind === "quote" ? " quote" : "") }, n.body), el("div", { class: "note-meta" }, n.book_title + (n.book_author ? " · " + n.book_author : "") + " · " + new Date(n.created_at).toLocaleDateString())))));
       const recsList = p.recommendations || [];
       if (recsList.length) page.append(el("div", { class: "card" }, el("div", { class: "eyebrow" }, mine ? "My recommendations" : p.display_name + " recommends"), el("div", { class: "sep" }),
         ...recsList.map(r => { const key = p.username + ":" + r.id; const read = (me.recs_read || []).includes(key); return el("div", { class: "rec" }, coverEl(r, false), el("div", {}, el("div", { class: "title" }, r.title, r.author ? el("small", { class: "muted" }, " · " + r.author) : null), el("div", { class: "row", style: "gap:6px;margin-top:2px" }, kindPill(r, false), r.note ? el("span", { class: "note" }, r.note) : null)),
@@ -888,6 +914,92 @@
     return el("div", { class: "stack" },
       el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "My history"), el("p", { class: "sub" }, "A snapshot of your shelf for every month you saved it. Only you can see this."))),
       el("div", { class: "card" }, rows.length ? rows.map(r => { const cats = (r.snapshot.categories || []).filter(c => (c.books || []).length); return el("div", { class: "history-month" }, el("div", { class: "m" }, monthName(r.month)), ...cats.map(c => el("div", { class: "l" }, el("b", {}, c.name + ": "), c.books.map(b => b.title).join(", ")))); }) : el("p", { class: "muted" }, "Save your shelf once and this month will show up here.")));
+  }
+
+  // ---------- quotes, notes, thoughts, journal (per book; each entry public or private) ----------
+  function openNotes(title, author) {
+    const overlay = el("div", { class: "crop-overlay", onclick: (e) => { if (e.target === overlay) overlay.remove(); } });
+    const list = el("div", { class: "stack", style: "gap:10px" });
+    const kindSel = el("select", { class: "input", style: "width:auto" }, ...NOTE_KINDS.map(k => el("option", { value: k[0] }, k[1])));
+    const body = el("textarea", { class: "input", rows: 4, placeholder: "A quote you loved, a thought, or a journal entry about this book…" });
+    const pub = el("input", { type: "checkbox" });
+    async function load() {
+      const { data } = await sb.from("notes").select("*").eq("user_id", me.id).ilike("book_title", title).order("created_at", { ascending: false });
+      fill(list, ...(data || []).map(n => el("div", { class: "note-row" },
+        el("div", { class: "row", style: "gap:8px" }, el("span", { class: "note-kind" }, NOTE_KINDS.find(k => k[0] === n.kind)?.[1] || "Note"), el("span", { class: "muted small" }, new Date(n.created_at).toLocaleDateString()),
+          el("label", { class: "pub-toggle" + (n.public ? " on" : ""), title: n.public ? "Friends can see this" : "Only you can see this" }, el("input", { type: "checkbox", checked: n.public, onchange: async (e) => { await sb.from("notes").update({ public: e.target.checked, updated_at: new Date().toISOString() }).eq("id", n.id); load(); } }), n.public ? "Public" : "Private"),
+          el("button", { class: "icon-btn", title: "Delete", style: "margin-left:auto", onclick: async () => { if (confirm("Delete this entry?")) { await sb.from("notes").delete().eq("id", n.id); load(); } } }, "✕")),
+        el("div", { class: "note-body" + (n.kind === "quote" ? " quote" : "") }, n.body))),
+        !(data || []).length ? el("p", { class: "muted small" }, "Nothing written yet. Everything starts private.") : null);
+    }
+    fill(overlay, el("div", { class: "crop-panel notes-panel" },
+      el("div", { class: "row", style: "justify-content:space-between" }, el("div", {}, el("div", { class: "eyebrow" }, "Quotes, notes & journal"), el("h2", {}, title), author ? el("div", { class: "muted small" }, author) : null), el("button", { class: "icon-btn", onclick: () => overlay.remove() }, "✕")),
+      el("form", { class: "stack", style: "gap:8px;margin:12px 0", onsubmit: async (e) => { e.preventDefault(); if (!body.value.trim()) return; const { error } = await sb.from("notes").insert({ user_id: me.id, book_title: title, book_author: author || "", kind: kindSel.value, body: body.value.trim(), public: pub.checked }); if (error) { toast(error.message); return; } body.value = ""; pub.checked = false; load(); toast("Saved."); } },
+        el("div", { class: "row" }, kindSel, el("label", { class: "row", style: "gap:6px;margin-left:auto" }, pub, "Friends can see this")), body, el("div", { class: "row", style: "justify-content:flex-end" }, el("button", { class: "btn primary sm", type: "submit" }, "Add"))),
+      el("div", { class: "sep" }), list));
+    document.body.append(overlay); load();
+  }
+
+  // ---------- My Books: everything you read, by year (Tiffany's request) ----------
+  async function pageBooks() {
+    if (!titleIndex) await loadTitles();
+    const page = el("div", { class: "stack" });
+    const log = me.reading_log || (me.reading_log = []);
+    const years = [...new Set(log.map(x => (x.finished || "").slice(0, 4)).filter(Boolean))].sort().reverse();
+    const cur = String(new Date().getFullYear()); if (!years.includes(cur)) years.unshift(cur);
+    let year = years[0];
+    const tabs = el("div", { class: "year-tabs" }), listBox = el("div", { class: "stack" }), stats = el("div", { class: "stats", style: "margin:0" });
+    async function save(msg) { await saveProfile({ reading_log: me.reading_log }); if (msg) toast(msg); drawAll(); if (titleIndex) loadTitles(); }
+    function drawTabs() { fill(tabs, ...years.map(y => el("button", { class: "year-tab" + (y === year ? " on" : ""), onclick: () => { year = y; drawAll(); } }, y, el("small", {}, log.filter(x => (x.finished || "").startsWith(y)).length)))); }
+    function drawStats() { const inYear = log.filter(x => (x.finished || "").startsWith(year)); const months = new Set(inYear.map(x => x.finished.slice(0, 7))).size;
+      fill(stats, el("div", { class: "stat" }, el("b", {}, inYear.length), el("span", {}, "Read in " + year)), el("div", { class: "stat" }, el("b", {}, log.length), el("span", {}, "All time")), el("div", { class: "stat" }, el("b", {}, months ? (inYear.length / months).toFixed(1) : "0"), el("span", {}, "Per month"))); }
+    function drawList() {
+      const rows = log.map((x, i) => ({ x, i })).filter(r => (r.x.finished || "").startsWith(year)).sort((a, b) => (b.x.finished || "").localeCompare(a.x.finished || ""));
+      fill(listBox, rows.length ? el("ul", { class: "books" }, ...rows.map(({ x, i }) => el("li", { class: "book log-row" },
+        el("span", { class: "log-date" }, x.finished ? new Date(x.finished + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—"),
+        coverEl(x, true, (url) => { x.cover = url; save(); }),
+        el("div", { class: "bmeta" }, el("div", { class: "title" }, x.title), el("div", { class: "author" }, kindPill(x, true, () => { x.kind = x.kind === "series" ? "book" : "series"; save(); }), contentSelect(x, (v) => { x.content = v; save(); }), x.author ? " " + x.author : "")),
+        el("div", { class: "tools" },
+          el("button", { class: "icon-btn", title: "Quotes, notes and journal", onclick: () => openNotes(x.title, x.author) }, "📝"),
+          el("button", { class: "icon-btn", title: "Change date finished", onclick: () => { const d = prompt("Date finished (YYYY-MM-DD):", x.finished || dayKey()); if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) { x.finished = d; save(); } } }, "📅"),
+          el("button", { class: "icon-btn", title: "Remove", onclick: () => { if (confirm(`Remove "${x.title}" from your books?`)) { log.splice(i, 1); save("Removed."); } } }, "✕"))))) :
+        el("div", { class: "empty-books" }, `Nothing logged for ${year} yet. Add the books you finished below.`));
+    }
+    function drawAll() { drawTabs(); drawStats(); drawList(); }
+    // add form
+    let kind = "book", pendingFile = null, pendingCover = null;
+    const t = el("input", { class: "input", placeholder: "Book you finished" }), a = el("input", { class: "input", placeholder: "Author (optional)" }), d = el("input", { class: "input", type: "date", value: dayKey() });
+    const setKind = (k) => { kind = k; kindBtn.textContent = kind === "book" ? "Book" : "Series"; kindBtn.classList.toggle("series", kind === "series"); };
+    const kindBtn = el("button", { class: "kind-toggle", type: "button", onclick: () => setKind(kind === "book" ? "series" : "book") }, "Book");
+    const contentSel = el("select", { class: "input", style: "width:auto" }, ...CONTENT.map(c => el("option", { value: c.key }, c.key ? c.label : "Content?")));
+    const picBtn = el("button", { class: "btn sm pic-btn", type: "button", title: "Attach a cover picture", onclick: () => pickAndCrop({ title: "Adjust the cover" }, (blob) => { pendingFile = blob; pendingCover = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); }) }, "📷");
+    const twrap = el("div", { class: "suggest-wrap" }, t);
+    attachSuggest(t, (hit) => { t.value = hit.title; if (hit.author && !a.value) a.value = hit.author; setKind(hit.kind === "series" ? "series" : "book"); if (hit.cover) { pendingCover = hit.cover; pendingFile = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); } });
+    const addBtn = el("button", { class: "btn sm primary", type: "submit" }, "Add to my books");
+    const form = el("form", { class: "add-book log-add", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) return; let cover = pendingCover; if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 500); } catch (ex) { toast("Picture didn't upload: " + ex.message); } addBtn.disabled = false; addBtn.textContent = "Add to my books"; }
+      log.push({ id: uid(), title: t.value.trim(), author: a.value.trim(), kind, content: contentSel.value, finished: d.value || dayKey(), cover: cover || undefined });
+      const y = (d.value || dayKey()).slice(0, 4); if (!years.includes(y)) { years.push(y); years.sort().reverse(); } year = y;
+      t.value = ""; a.value = ""; pendingFile = pendingCover = null; picBtn.textContent = "📷"; picBtn.classList.remove("has-pic"); contentSel.value = ""; setKind("book");
+      await save("Added. Nice one."); } },
+      twrap, a, el("div", { class: "row", style: "gap:6px;flex-wrap:wrap" }, d, kindBtn, contentSel, picBtn, addBtn));
+    page.append(el("div", { class: "page-head" }, el("div", {}, el("div", { class: "eyebrow" }, "Reading record"), el("h1", {}, "My Books"), el("p", { class: "sub" }, "Every book you finish, kept by year. Tap 📝 on any book for quotes, notes, thoughts and journal entries. Each entry is private unless you make it public."))),
+      stats, tabs, listBox, el("div", { class: "card" }, el("div", { class: "eyebrow" }, "Finished a book?"), el("div", { style: "height:8px" }), form));
+    drawAll(); return page;
+  }
+
+  // ---------- terms ----------
+  function pageTerms() {
+    return el("div", { class: "stack prose" },
+      el("div", { class: "page-head" }, el("div", {}, el("div", { class: "eyebrow" }, "The fine print"), el("h1", {}, "Terms & agreement"), el("p", { class: "sub" }, "Shelfmates is a small site made by family for friends. These are the house rules."))),
+      el("div", { class: "card stack" },
+        el("p", {}, el("b", {}, "1. Books only. "), "Shelves, recommendations, covers, notes and pictures are for real books, audiobooks and series. Uploading random pictures, spam, or anything that isn't about books isn't allowed."),
+        el("p", {}, el("b", {}, "2. Be decent. "), "No harassment, no hateful or sexual content, nothing illegal. Mark books that have a lot of swearing or explicit content so friends can decide for themselves."),
+        el("p", {}, el("b", {}, "3. Don't mess with the app. "), "No bots, scripts, coin farming, fake accounts, or trying to get into other people's data."),
+        el("p", {}, el("b", {}, "4. We can close accounts. "), "If someone breaks these rules, Joseph or Michael can remove content or terminate the account, with or without warning."),
+        el("p", {}, el("b", {}, "5. Your stuff. "), "You own what you write. Public notes and your card can be seen by anyone signed in; private notes and your history are only visible to you. Passwords can't be reset by email, so write yours down. Lost it? Email ", el("a", { href: "mailto:" + HELP_EMAIL }, HELP_EMAIL), "."),
+        el("p", {}, el("b", {}, "6. No promises. "), "This is a hobby project. It might go down, change, or lose data. We'll do our best, but there's no guarantee."),
+        el("p", { class: "muted small" }, "Last updated September 9, 2026.")),
+      session ? el("a", { class: "btn", href: "#/shelf" }, "Back to my shelf") : el("a", { class: "btn", href: "#/" }, "Back to sign in"));
   }
 
   // ---------- notices panel ----------
