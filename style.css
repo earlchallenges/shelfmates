@@ -285,7 +285,8 @@ p{margin:0}
 .pet-choice:hover{border-color:var(--accent)}
 .pet-choice .pe{font-size:2rem}
 .pet-choice small{color:var(--muted)}
-.banner-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.banner-grid{display:grid;grid-auto-flow:column;grid-auto-columns:132px;grid-template-rows:repeat(2,auto);gap:10px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:4px 2px 10px;max-width:100%}
+.banner-grid .banner-opt{scroll-snap-align:start}
 .banner-opt{display:flex;flex-direction:column;gap:4px;padding:6px;border:2px solid transparent;border-radius:12px;background:var(--surface-2);text-align:left}
 .banner-opt.on{border-color:var(--accent)}
 .banner-opt.locked{opacity:.6}

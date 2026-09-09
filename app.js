@@ -87,6 +87,58 @@
     { key: "eternal",   name: "Eternal",         level: 75, desc: "White gold light that never stops moving." },
   ];
   const frameOf = (p) => FRAMES.find(f => f.key === (p.frame || "none")) || FRAMES[0];
+
+  // ---------- 200+ more banners, generated from themes (the 12 originals above stay exactly as they are) ----------
+  const BANNER_THEMES = [
+    { theme: "Classic", colors: ["#2E6E4E","#3F8A66","#1F4D3A","#B8891B","#6B4C8A","#B3556A","#2A6F8F","#1C2320","#7A4B2A","#D9793A","#5A2D82","#3E9A8C"],
+      names: ["Bookcloth Red","Linen","Leather Spine","Marbled Endpaper","Gilt Edge","Foxed Pages","Vellum","Deckle Edge","Reading Lamp","First Edition","Slipcase","Bookplate","Ribbon Marker","Dust Jacket","Card Catalog","Reading Nook","Quill & Ink","Pressed Flower","Old Atlas","Almanac","Chapter One","Epilogue"] },
+    { theme: "Forest", colors: ["#0F2E22","#1F4D3A","#3E7A5A","#6B8F3A","#A3B86C","#4A2E1A","#7A4B2A","#C9A96E","#2E4A2E","#8FB996","#5B3A22","#DDE8C6"],
+      names: ["Pine Hollow","Mossbank","Fern Gully","Birch Grove","Old Oak","Redwood","Canopy","Undergrowth","Morning Dew","Mushroom Ring","Cedar Smoke","Wildflower Meadow","Willow Creek","Maple Turn","Acorn","Bramble","Fireflies","Foxglove","Mistwood","Timberline","Riverbend","Hollow Log"] },
+    { theme: "Elements", colors: ["#C2410C","#F59E0B","#DC2626","#0E7490","#67E8F9","#1E3A8A","#78716C","#44403C","#E7E5E4","#84CC16","#F97316","#0EA5E9"],
+      names: ["Ember Glow","Wildfire","Lava Flow","Tidepool","Deep Current","Rainfall","Granite","Slate","Sandstone","Gale","Thunderhead","Lightning Strike","Frostbite","Glacier","Hot Spring","Volcanic Glass","Riptide","Sirocco","Monsoon","Bedrock","Cinder","Whirlpool"] },
+    { theme: "Magic", colors: ["#4C1D95","#7C3AED","#A78BFA","#F1D17A","#1E1B4B","#D946EF","#0F172A","#FDE68A","#312E81","#C084FC","#831843","#22D3EE"],
+      names: ["Arcane Tome","Rune Circle","Moon Ritual","Crystal Ball","Enchanted Ink","Witch's Brew","Phoenix Feather","Dragon Scale","Fairy Ring","Sorcerer's Cloak","Spellbound","Wizard's Tower","Mana Well","Star Chart","Potion Shelf","Cursed Page","Unicorn Mane","Griffin Wing","Glowing Sigil","Portal","Midnight Coven","Elven Script"] },
+    { theme: "Science", colors: ["#0EA5E9","#0369A1","#22C55E","#14532D","#F59E0B","#111827","#E5E7EB","#6366F1","#A855F7","#EF4444","#06B6D4","#F3F4F6"],
+      names: ["Graph Paper","Petri Dish","Double Helix","Circuit Board","Periodic Table","Lab Bench","Bunsen Flame","Microscope","Blueprint","Orbital","Isotope","Beaker Green","Neuron","Telescope","Wavelength","Vector Field","Fossil Bed","Magnet","Prism Split","Binary","Quantum Foam","Radar"] },
+    { theme: "Sky & Space", colors: ["#0B1026","#1B2340","#2A3A6B","#F1C27D","#7FC0DD","#F5F5F5","#5B21B6","#0E7490","#FB7185","#FDE68A","#1E293B","#38BDF8"],
+      names: ["Nebula","Comet Tail","Milky Way","Lunar Sea","Solar Flare","Twilight","Dawn Chorus","Cirrus","Thunder Sky","Saturn Rings","Eclipse","Northern Star","Meteor Shower","Blue Hour","Golden Hour","Stratosphere","Orion's Belt","Red Planet","Ice Moon","Supernova","Zenith","Horizon Line"] },
+    { theme: "Seasons", colors: ["#F97316","#B45309","#7C2D12","#FDE68A","#84CC16","#FB7185","#E0F2FE","#0EA5E9","#FFFFFF","#65A30D","#F5D0FE","#9A3412"],
+      names: ["Harvest","Pumpkin Patch","First Frost","Snow Day","Cherry Blossom","Spring Rain","Summer Porch","Fireworks","Lemonade","Autumn Walk","Cider Press","Winter Cabin","Tulip Field","Sunflower","Hayride","Icicle","Candlelight","Beach Day","Maple Syrup","Cocoa","Sprout","Golden Leaf"] },
+    { theme: "Cozy", colors: ["#7A4B2A","#C9A96E","#F3E9D2","#8B5E3C","#5B3A22","#B3556A","#D4A373","#A98467","#6C584C","#F0EAD2","#DDA15E","#BC6C25"],
+      names: ["Fireside","Wool Blanket","Tea Steam","Rainy Window","Quilt","Rocking Chair","Bread Crust","Cinnamon","Cabin Lamp","Sunday Morning","Knit Sweater","Warm Toast","Porch Swing","Old Radio","Coffee Ring","Patchwork","Candle Wax","Slippers","Woodstove","Bookshop Bell","Honey Jar","Attic Light"] },
+    { theme: "Ocean", colors: ["#0B2540","#123B52","#2A6F8F","#7FC0DD","#CFFAFE","#0E7490","#F5E6C8","#2DD4BF","#14B8A6","#164E63","#A5F3FC","#FDE68A"],
+      names: ["Kelp Forest","Coral Reef","Lighthouse","Sea Foam","Driftwood","Tide Chart","Abyss","Pearl","Shipwreck","Sailcloth","Harbor Light","Whale Song","Salt Air","Marina","Blue Lagoon","Nautilus","Moonlit Bay","Undertow","Sandbar","Mermaid Scale","Storm Surge","Anchor"] },
+    { theme: "Metals & Gems", colors: ["#8A6412","#F1D17A","#C0C4CC","#E2E8F0","#B87333","#1E3A8A","#93C5FD","#065F46","#34D399","#7F1D1D","#F87171","#4C1D95"],
+      names: ["Brass","Copper Patina","Pewter","Chrome","Ruby","Sapphire Cut","Emerald Cut","Onyx","Opal","Garnet","Topaz","Jade","Amber Resin","Moonstone","Tiger's Eye","Silver Leaf","Rose Quartz","Lapis","Turquoise","Black Pearl","Diamond Dust","Bronze Age"] },
+  ];
+  function bannerCss(style, c) {
+    const [a, b, d, e] = c;
+    switch (style % 8) {
+      case 0: return `linear-gradient(135deg,${a},${b} 60%,${d})`;
+      case 1: return `linear-gradient(160deg,${a},${b} 50%,${d})`;
+      case 2: return `repeating-linear-gradient(90deg,${a} 0 18px,${b} 18px 30px,${d} 30px 36px,${e} 36px 52px)`;
+      case 3: return `radial-gradient(circle at 20% 30%,${e} 0 2px,transparent 3px),radial-gradient(circle at 70% 60%,${e} 0 2px,transparent 3px),radial-gradient(circle at 45% 80%,${e} 0 1.5px,transparent 2.5px),radial-gradient(circle at 85% 20%,${e} 0 2px,transparent 3px),linear-gradient(135deg,${a},${b})`;
+      case 4: return `repeating-linear-gradient(45deg,${a} 0 10px,${b} 10px 20px),linear-gradient(${b},${b})`;
+      case 5: return `radial-gradient(circle at 15% 40%,${d} 0 10px,transparent 11px),radial-gradient(circle at 60% 70%,${d} 0 8px,transparent 9px),radial-gradient(circle at 85% 30%,${d} 0 12px,transparent 13px),linear-gradient(135deg,${a},${b})`;
+      case 6: return `repeating-linear-gradient(0deg,${a} 0 14px,${b} 14px 16px)`;
+      default: return `linear-gradient(120deg,${a},${b} 35%,${d} 55%,${e} 80%,${a})`;
+    }
+  }
+  (function buildBanners() {
+    let n = 0;
+    for (const t of BANNER_THEMES) {
+      t.names.forEach((name, i) => {
+        n++; const c = [t.colors[(i * 5) % 12], t.colors[(i * 7 + 3) % 12], t.colors[(i * 3 + 6) % 12], t.colors[(i * 11 + 9) % 12]];
+        // every third one is earned with badges (1 up to 150); the rest are bought, mostly for a reasonable price, a few very expensive
+        let need = 0, cost = 0;
+        if (n % 3 === 0) need = Math.min(150, 1 + Math.round(((n / 3) % 40) * 3.9));
+        else if (n % 11 === 0) cost = 1000 + (n % 4) * 500;
+        else cost = 40 + (n % 9) * 30;
+        BANNERS.push({ key: (t.theme + "-" + name).toLowerCase().replace(/[^a-z0-9]+/g, "-"), name, theme: t.theme, need, cost, color: c[0], css: bannerCss(i, c) });
+      });
+    }
+  })();
+  const bannerThemeOf = (b) => b.theme || "Classic";
   const ACCENTS = [
     { key: "green", name: "Bookcloth green", hex: "#2E6E4E", need: 0 },
     { key: "rose",  name: "Rose",            hex: "#B3556A", need: 1 },
@@ -801,7 +853,9 @@
     const drawSw = () => fill(sw, ...ACCENTS.map(a => el("button", { class: "swatch" + (a.key === accent ? " on" : "") + (n < a.need ? " locked" : ""), style: `background:${a.hex}`, title: n < a.need ? `${a.name} — unlocks at ${a.need} badges` : a.name, onclick: () => { if (n < a.need) { toast(`${a.name} unlocks at ${a.need} badges.`); return; } accent = a.key; document.documentElement.dataset.accent = accent; drawSw(); } })));
     const drawAv = () => fill(av, ...AVATAR_SETS.map(set => el("div", {}, el("div", { class: "eyebrow" }, set.set + (n < set.need ? ` · unlocks at ${set.need} badges` : "")), el("div", { style: "height:6px" }), el("div", { class: "avatars" },
       ...(set.items || [me.username[0].toUpperCase(), (me.display_name || "?")[0].toUpperCase()]).filter((v, i, arr) => arr.indexOf(v) === i).map(it => el("button", { class: "av-opt" + (it === avatar ? " on" : "") + (n < set.need ? " locked" : ""), onclick: () => { if (n < set.need) return; avatar = it; drawAv(); } }, it))))));
-    const drawBanners = () => fill(bnGrid, ...BANNERS.map(b => { const owned = ownsBanner(me, b); const canBuy = !owned && b.cost && (me.coins || 0) >= b.cost;
+    let bannerFilter = "All";
+    const themeSel = el("select", { class: "input", style: "width:auto", onchange: () => { bannerFilter = themeSel.value; drawBanners(); } }, ...["All", "Owned", ...BANNER_THEMES.map(t => t.theme)].map(t => el("option", { value: t }, t)));
+    const drawBanners = () => fill(bnGrid, ...BANNERS.filter(b => bannerFilter === "All" || (bannerFilter === "Owned" ? ownsBanner(me, b) : bannerThemeOf(b) === bannerFilter)).map(b => { const owned = ownsBanner(me, b); const canBuy = !owned && b.cost && (me.coins || 0) >= b.cost;
       return el("button", { class: "banner-opt" + (b.key === banner ? " on" : "") + (owned ? "" : " locked"), onclick: async () => {
         if (owned) { banner = b.key; drawBanners(); return; }
         if (b.cost) { if (!canBuy) { toast(`${b.name} costs ${b.cost} coins. You have ${me.coins || 0}.`); return; } if (!confirm(`Buy the ${b.name} banner for ${b.cost} coins?`)) return; me.coins -= b.cost; const st = stats(me); st.owned_banners = [...(st.owned_banners || []), b.key]; banner = b.key; await saveProfile({ banner, stats: st }); drawBanners(); updateTopbar(); toast("Bought. Looking sharp."); }
@@ -817,7 +871,7 @@
       el("div", { class: "card stack" },
         el("div", { class: "field" }, el("label", {}, "Profile picture"), photoRow, el("div", { class: "hint" }, "Your picture stays yours. Badges and coins change the banner behind it, not the picture.")),
         el("div", { class: "field" }, el("label", {}, "Frame"), el("div", { class: "hint" }, "A ring around your picture. Earned by level. " + FRAMES.filter(f => f.level > myLevel).length + " still to earn."), frGrid),
-        el("div", { class: "field" }, el("label", {}, "Banner"), bnGrid),
+        el("div", { class: "field" }, el("label", {}, "Banner"), el("div", { class: "row" }, themeSel, el("span", { class: "hint" }, `${BANNERS.length} banners · ${BANNERS.filter(b => ownsBanner(me, b)).length} yours · scroll sideways`)), bnGrid),
         el("div", { class: "field" }, el("label", {}, "Name"), name),
         el("div", { class: "field" }, el("label", {}, "Tagline"), tag),
         el("div", { class: "field" }, el("label", {}, "Accent color"), sw),
