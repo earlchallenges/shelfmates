@@ -56,6 +56,34 @@
     { key: "sunrise", name: "Sunrise",      need: 0,  cost: 300, color: "#D9793A", css: "linear-gradient(180deg,#F1C27D,#D9793A 55%,#7A3E5A)" },
     { key: "royal",   name: "Royal",        need: 40, cost: 0,   color: "#5A2D82", css: "repeating-linear-gradient(45deg,#3B1E5A 0 10px,#5A2D82 10px 20px),linear-gradient(#5A2D82,#5A2D82)" },
   ];
+  // ---------- avatar frames (earned by character level; ring around the picture, separate from the banner) ----------
+  const FRAMES = [
+    { key: "none",      name: "No frame",        level: 1,  desc: "Plain and simple." },
+    { key: "line",      name: "Thin Line",       level: 2,  desc: "A single clean ring in your accent color." },
+    { key: "bronze",    name: "Bronze Ring",     level: 3,  desc: "Warm hammered bronze. Your first metal." },
+    { key: "silver",    name: "Silver Ring",     level: 5,  desc: "Brushed silver with a soft inner highlight." },
+    { key: "gold",      name: "Gold Ring",       level: 7,  desc: "Polished gold that catches the light." },
+    { key: "ember",     name: "Ember",           level: 10, desc: "Smoldering orange and red with a faint glow." },
+    { key: "sapphire",  name: "Sapphire",        level: 12, desc: "Deep blue stone with a bright facet." },
+    { key: "emerald",   name: "Emerald",         level: 15, desc: "Two green rings, one bright and one dark." },
+    { key: "amethyst",  name: "Amethyst",        level: 18, desc: "Purple crystal with a slow breathing glow." },
+    { key: "rosegold",  name: "Rose Gold",       level: 20, desc: "Pink-gold with a pearl inner edge." },
+    { key: "laurel",    name: "Ivory Laurel",    level: 22, desc: "A dotted ivory wreath, like a book prize." },
+    { key: "midnight",  name: "Midnight",        level: 25, desc: "Ink-dark ring scattered with tiny stars." },
+    { key: "aurora",    name: "Aurora",          level: 28, desc: "Northern lights that slowly turn around you." },
+    { key: "dragon",    name: "Dragonfire",      level: 30, desc: "Red and gold flames licking the edge." },
+    { key: "platinum",  name: "Platinum",        level: 32, desc: "Cool white metal, heavy and rare." },
+    { key: "ocean",     name: "Ocean Glass",     level: 35, desc: "Sea-glass teal with a wave of light." },
+    { key: "sunburst",  name: "Sunburst",        level: 38, desc: "Rays of gold shooting out in every direction." },
+    { key: "crown",     name: "Crimson Crown",   level: 40, desc: "Royal red with gold points around the rim." },
+    { key: "frost",     name: "Frost",           level: 42, desc: "Pale ice with a crystalline shimmer." },
+    { key: "obsidian",  name: "Obsidian",        level: 45, desc: "Black glass with a razor-thin gold edge." },
+    { key: "prism",     name: "Prismatic",       level: 48, desc: "Every color at once, turning slowly." },
+    { key: "celestial", name: "Celestial",       level: 50, desc: "Deep space, a ring of stars, and a bright halo." },
+    { key: "mythic",    name: "Mythic",          level: 60, desc: "Violet fire and gold. Very few will ever see it." },
+    { key: "eternal",   name: "Eternal",         level: 75, desc: "White gold light that never stops moving." },
+  ];
+  const frameOf = (p) => FRAMES.find(f => f.key === (p.frame || "none")) || FRAMES[0];
   const ACCENTS = [
     { key: "green", name: "Bookcloth green", hex: "#2E6E4E", need: 0 },
     { key: "rose",  name: "Rose",            hex: "#B3556A", need: 1 },
@@ -191,7 +219,7 @@
     me.coins = (me.coins || 0) + r.coins * times; me.coins_earned = (me.coins_earned || 0) + r.coins * times; me.xp = (me.xp || 0) + r.xp * times;
     award._sum = award._sum || { coins: 0, xp: 0 }; award._sum.coins += r.coins * times; award._sum.xp += r.xp * times;
     const after = levelOf(me.xp);
-    if (after > before) toast(`⭐ Level ${after}: ${levelTitle(after)}`, "badge-toast");
+    if (after > before) { toast(`⭐ Level ${after}: ${levelTitle(after)}`, "badge-toast"); const fr = FRAMES.filter(f => f.level > before && f.level <= after); for (const f of fr) toast(`🖼️ New frame unlocked: ${f.name}`, "badge-toast"); }
   }
   function flushAwardToast() { const s = award._sum; award._sum = null; if (s && (s.coins || s.xp)) toast(`+${s.coins} coins · +${s.xp} XP`); updateTopbar(); }
 
@@ -217,7 +245,7 @@
   async function signOut() { await sb.auth.signOut(); session = null; me = null; location.hash = "#/"; render(); }
 
   // ---------- data ----------
-  const PROFILE_PUBLIC = "id,username,display_name,tagline,avatar,accent,photo_url,banner,xp,pet,categories,recommendations,badges,updated_at";
+  const PROFILE_PUBLIC = "id,username,display_name,tagline,avatar,accent,photo_url,banner,frame,xp,pet,categories,recommendations,badges,updated_at";
   async function loadMe() {
     const { data, error } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
     if (error) throw error;
@@ -268,21 +296,39 @@
   async function checkBadges() { const fresh = computeBadges(me, friends.length); if (fresh.length !== (me.badges || []).length) await saveProfile({}); }
 
   async function saveShelf() {
-    const mk = monthKey(); const st = stats(me);
-    const oldKeys = new Set(allBooks(me).map(b => (b.title || "").toLowerCase()));
-    const newBooks = allBooks(draft).filter(b => !oldKeys.has((b.title || "").toLowerCase())).length;
-    const oldCovers = allBooks(me).filter(b => b.cover).length, newCovers = Math.max(0, allBooks(draft).filter(b => b.cover).length - oldCovers);
-    award("book", newBooks); award("cover", newCovers); award("save");
+    const mk = monthKey(), today = dayKey(); const st = stats(me);
+    // Coins only for titles you've never been paid for, so adding and removing the same book over and over earns nothing.
+    const paid = new Set(st.rewarded_titles || []);
+    const fresh = [...new Set(allBooks(draft).map(b => (b.title || "").trim().toLowerCase()).filter(t => t && !paid.has(t)))];
+    award("book", fresh.length); st.rewarded_titles = [...paid, ...fresh].slice(-2000);
+    // Covers: only pay for a higher cover count than ever before.
+    const coverCount = allBooks(draft).filter(b => b.cover).length; const paidCovers = st.covers_rewarded || 0;
+    if (coverCount > paidCovers) { award("cover", coverCount - paidCovers); st.covers_rewarded = coverCount; }
+    // The save bonus and pet growth happen once a day, no matter how many times you save.
+    if (st.last_save_reward_day !== today) { award("save"); st.last_save_reward_day = today; if (me.pet) me.pet.xp = (me.pet.xp || 0) + 5; }
     const months = [...new Set([...(me.months_updated || []), mk])];
     if (!(me.months_updated || []).includes(mk)) {
       award("month");
       if (new Date().getDate() <= 7) st.fresh_months = [...new Set([...(st.fresh_months || []), mk])];
     }
-    st.books_added = (st.books_added || 0) + newBooks;
-    if (me.pet) me.pet.xp = (me.pet.xp || 0) + 5;
-    await saveProfile({ categories: draft.categories, recommendations: draft.recommendations, months_updated: months, pet: me.pet, stats: st }, { announce: true });
+    st.books_added = (st.books_added || 0) + fresh.length;
+    // Friend notices: at most 3 per day from you, and no friend hears from you more than twice a day.
+    let targets = [];
+    if (friends.length) {
+      if (st.shelf_notice_day !== today) { st.shelf_notice_day = today; st.shelf_notice_count = 0; }
+      if ((st.shelf_notice_count || 0) < 3) {
+        const since = new Date(); since.setHours(0, 0, 0, 0);
+        const { data } = await sb.from("notices").select("user_id").eq("actor_id", me.id).eq("kind", "shelf").gte("created_at", since.toISOString());
+        const counts = {}; (data || []).forEach(n => { counts[n.user_id] = (counts[n.user_id] || 0) + 1; });
+        targets = friends.filter(f => (counts[f.id] || 0) < 2).map(f => f.id);
+        if (targets.length) st.shelf_notice_count = (st.shelf_notice_count || 0) + 1;
+      }
+    }
+    await saveProfile({ categories: draft.categories, recommendations: draft.recommendations, months_updated: months, pet: me.pet, stats: st });
+    if (targets.length) await notify(targets, "shelf", "updated their shelf");
     await sb.from("history").upsert({ user_id: me.id, month: mk, snapshot: { categories: draft.categories, recommendations: draft.recommendations } }, { onConflict: "user_id,month" });
-    dirty = false; toast("Shelf saved. Your friends will get a notice.");
+    dirty = false; toast(targets.length ? "Shelf saved. Your friends will get a notice." : "Shelf saved.");
+    if (titleIndex) loadTitles();
   }
 
   // daily visit + first-of-month reminder
@@ -327,6 +373,34 @@
     document.body.append(inp); inp.click();
   }
 
+  // ---------- shared title suggestions ----------
+  let titleIndex = null;
+  async function loadTitles() {
+    try { const { data } = await sb.rpc("all_titles"); titleIndex = data || []; } catch (e) { titleIndex = []; }
+  }
+  function attachSuggest(input, onPick) {
+    const box = el("ul", { class: "suggest", hidden: true });
+    input.parentNode.insertBefore(box, input.nextSibling);
+    const hide = () => { box.hidden = true; };
+    input.addEventListener("input", () => {
+      const q = input.value.trim().toLowerCase();
+      if (!q || !titleIndex) { hide(); return; }
+      // sensitive on purpose: one letter shows every title starting with it, then titles with a word starting with it, then anything containing it
+      const lc = (t) => t.title.toLowerCase();
+      const starts = titleIndex.filter(t => lc(t).startsWith(q));
+      const words = titleIndex.filter(t => !lc(t).startsWith(q) && lc(t).split(/\s+/).some(w => w.startsWith(q)));
+      const inside = titleIndex.filter(t => !lc(t).startsWith(q) && !lc(t).split(/\s+/).some(w => w.startsWith(q)) && lc(t).includes(q));
+      const hits = [...starts, ...words, ...inside].slice(0, 8);
+      if (!hits.length) { hide(); return; }
+      fill(box, ...hits.map(t => el("li", { onmousedown: (e) => { e.preventDefault(); onPick(t); hide(); } },
+        t.cover ? el("img", { src: t.cover, alt: "" }) : el("span", { class: "cover-ph" }, "📕"),
+        el("span", {}, el("b", {}, t.title), t.author ? el("small", {}, " · " + t.author) : null, el("small", { class: "muted" }, t.kind === "series" ? " · series" : "", ` · ${t.uses} shelf${t.uses === 1 ? "" : "ves"}`)))));
+      box.hidden = false;
+    });
+    input.addEventListener("blur", () => setTimeout(hide, 150));
+    input.addEventListener("keydown", (e) => { if (e.key === "Escape") hide(); });
+  }
+
   // ---------- routing ----------
   const routes = { "": pageAuth, "/": pageAuth, "/shelf": pageShelf, "/friends": pageFriends, "/badges": pageBadges, "/card": pageCard, "/profile": pageProfile, "/history": pageHistory };
   function route() {
@@ -353,12 +427,16 @@
     fill(main, await r.fn(r.arg));
     window.scrollTo(0, 0);
   }
-  function avatarEl(p, size = "") {
-    if (p.photo_url) return el("span", { class: "avatar photo " + size }, el("img", { src: p.photo_url, alt: "" }));
-    const isEmoji = p.avatar && p.avatar.length > 1;
-    const a = el("span", { class: "avatar " + size, style: isEmoji ? "background:var(--surface-2)" : "" }, p.avatar || "?");
-    if (!isEmoji && p.accent && p.accent !== "green") a.style.background = ACCENTS.find(x => x.key === p.accent)?.hex || "";
-    return a;
+  function avatarEl(p, size = "", frameKey) {
+    let a;
+    if (p.photo_url) a = el("span", { class: "avatar photo " + size }, el("img", { src: p.photo_url, alt: "" }));
+    else {
+      const isEmoji = p.avatar && p.avatar.length > 1;
+      a = el("span", { class: "avatar " + size, style: isEmoji ? "background:var(--surface-2)" : "" }, p.avatar || "?");
+      if (!isEmoji && p.accent && p.accent !== "green") a.style.background = ACCENTS.find(x => x.key === p.accent)?.hex || "";
+    }
+    const fk = frameKey || p.frame || "none";
+    return fk === "none" ? a : el("span", { class: "av-frame fr-" + fk + " " + size }, a);
   }
   const bannerEl = (p, cls = "") => el("div", { class: "banner " + cls, style: "background:" + bannerOf(p).css });
   const kindPill = (item, editable, onToggle) => el("button", { class: "kind " + (item.kind === "series" ? "series" : "book"), title: editable ? "Click to switch between book and series" : "", disabled: !editable, onclick: (e) => { e.preventDefault(); if (editable) onToggle(); } }, item.kind === "series" ? "Series" : "Book");
@@ -401,6 +479,7 @@
   }
 
   async function pageShelf() {
+    if (!titleIndex) await loadTitles();
     const page = el("div", { class: "stack" });
     const mk = monthKey(); const monthDone = (me.months_updated || []).includes(mk);
     page.append(el("div", { class: "page-head" },
@@ -423,11 +502,20 @@
       draft.categories.push({ name: name.trim().slice(0, 40), custom: true, books: [] }); markDirty(); drawShelf();
     }
     function addRowFor(books, onAdd, placeholder = "Title") {
-      let kind = "book";
+      let kind = "book", pendingFile = null, pendingCover = null;
       const t = el("input", { class: "input", placeholder }), a = el("input", { class: "input", placeholder: "Author (optional)" });
-      const kindBtn = el("button", { class: "kind-toggle", type: "button", onclick: () => { kind = kind === "book" ? "series" : "book"; kindBtn.textContent = kind === "book" ? "Book" : "Series"; kindBtn.classList.toggle("series", kind === "series"); } }, "Book");
-      return el("form", { class: "add-book", onsubmit: (e) => { e.preventDefault(); if (!t.value.trim()) return; onAdd({ title: t.value.trim(), author: a.value.trim(), kind }); } },
-        t, a, el("div", { class: "row", style: "gap:6px" }, kindBtn, el("button", { class: "btn sm", type: "submit" }, "Add")));
+      const setKind = (k) => { kind = k; kindBtn.textContent = kind === "book" ? "Book" : "Series"; kindBtn.classList.toggle("series", kind === "series"); };
+      const kindBtn = el("button", { class: "kind-toggle", type: "button", onclick: () => setKind(kind === "book" ? "series" : "book") }, "Book");
+      const picBtn = el("button", { class: "btn sm pic-btn", type: "button", title: "Attach a cover picture", onclick: () => pickImage((f) => { pendingFile = f; pendingCover = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); }) }, "📷");
+      const wrap = el("div", { class: "suggest-wrap" }, t);
+      attachSuggest(t, (hit) => { t.value = hit.title; if (hit.author && !a.value) a.value = hit.author; setKind(hit.kind === "series" ? "series" : "book"); if (hit.cover) { pendingCover = hit.cover; pendingFile = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); } });
+      const addBtn = el("button", { class: "btn sm", type: "submit" }, "Add");
+      return el("form", { class: "add-book", onsubmit: async (e) => {
+        e.preventDefault(); if (!t.value.trim()) return;
+        let cover = pendingCover;
+        if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 400); } catch (ex) { toast("Picture didn't upload: " + ex.message); } addBtn.disabled = false; addBtn.textContent = "Add"; }
+        onAdd({ title: t.value.trim(), author: a.value.trim(), kind, cover: cover || undefined });
+      } }, wrap, a, el("div", { class: "row", style: "gap:6px" }, kindBtn, picBtn, addBtn));
     }
     function drawShelf() {
       fill(shelf, ...draft.categories.map((cat, ci) => {
@@ -456,14 +544,19 @@
     function drawRecs() {
       const list = draft.recommendations || (draft.recommendations = []);
       const t = el("input", { class: "input", placeholder: "Title" }), a = el("input", { class: "input", placeholder: "Author" }), n = el("input", { class: "input", placeholder: "Why should they read it?" });
-      let kind = "book";
-      const kindBtn = el("button", { class: "kind-toggle", type: "button", onclick: () => { kind = kind === "book" ? "series" : "book"; kindBtn.textContent = kind === "book" ? "Book" : "Series"; kindBtn.classList.toggle("series", kind === "series"); } }, "Book");
+      let kind = "book", pendingFile = null, pendingCover = null;
+      const setKind = (k) => { kind = k; kindBtn.textContent = kind === "book" ? "Book" : "Series"; kindBtn.classList.toggle("series", kind === "series"); };
+      const kindBtn = el("button", { class: "kind-toggle", type: "button", onclick: () => setKind(kind === "book" ? "series" : "book") }, "Book");
+      const picBtn = el("button", { class: "btn sm pic-btn", type: "button", title: "Attach a cover picture", onclick: () => pickImage((f) => { pendingFile = f; pendingCover = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); }) }, "📷");
+      const twrap = el("div", { class: "suggest-wrap" }, t);
+      attachSuggest(t, (hit) => { t.value = hit.title; if (hit.author && !a.value) a.value = hit.author; setKind(hit.kind === "series" ? "series" : "book"); if (hit.cover) { pendingCover = hit.cover; pendingFile = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); } });
+      const addBtn = el("button", { class: "btn sm", type: "submit" }, "Add");
       fill(recs,
         el("div", { class: "eyebrow" }, "For other readers"), el("h2", {}, "My recommendations"),
         el("p", { class: "muted small" }, `Up to ${MAX_PER_CATEGORY}. Friends can mark one as read and you both earn coins.`), el("div", { class: "sep" }),
         ...list.map((r, i) => el("div", { class: "rec" }, coverEl(r, true, (url) => { r.cover = url; markDirty(); drawRecs(); }), el("div", {}, el("div", { class: "title" }, r.title, r.author ? el("small", { class: "muted" }, " · " + r.author) : null), el("div", { class: "row", style: "gap:6px;margin-top:2px" }, kindPill(r, true, () => { r.kind = r.kind === "series" ? "book" : "series"; markDirty(); drawRecs(); }), r.note ? el("span", { class: "note" }, r.note) : null)),
           el("button", { class: "icon-btn", title: "Remove", onclick: () => { list.splice(i, 1); markDirty(); drawRecs(); } }, "✕"))),
-        list.length < MAX_PER_CATEGORY ? el("form", { class: "add-book rec-add", onsubmit: (e) => { e.preventDefault(); if (!t.value.trim()) return; list.push({ id: uid(), title: t.value.trim(), author: a.value.trim(), note: n.value.trim(), kind }); markDirty(); drawRecs(); } }, t, a, n, el("div", { class: "row", style: "gap:6px" }, kindBtn, el("button", { class: "btn sm", type: "submit" }, "Add"))) : el("p", { class: "muted small" }, "That's 10. Remove one to add another."));
+        list.length < MAX_PER_CATEGORY ? el("form", { class: "add-book rec-add", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) return; let cover = pendingCover; if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 400); } catch (ex) { toast("Picture didn't upload: " + ex.message); } } list.push({ id: uid(), title: t.value.trim(), author: a.value.trim(), note: n.value.trim(), kind, cover: cover || undefined }); markDirty(); drawRecs(); } }, twrap, a, n, el("div", { class: "row", style: "gap:6px" }, kindBtn, picBtn, addBtn)) : el("p", { class: "muted small" }, "That's 10. Remove one to add another."));
     }
     function drawAll() { drawShelf(); drawRecs(); drawSave(); }
     drawAll(); return page;
@@ -486,7 +579,7 @@
     page.append(el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "Friends"), el("p", { class: "sub" }, "What everyone's reading, and the book each friend is most excited about."))),
       el("div", { class: "card" }, el("div", { class: "eyebrow" }, "Add a friend"), el("div", { style: "height:8px" }), addForm, el("p", { class: "hint", style: "margin-top:8px" }, "Your username is ", el("b", {}, me.username), ". Tell friends to add you, or add them.")));
     if (pendingIn.length) page.append(el("div", { class: "card" }, el("div", { class: "eyebrow" }, "Wants to be your friend"), ...pendingIn.map(p => el("div", { class: "row", style: "padding:10px 0" }, avatarEl(p), el("b", {}, p.display_name), el("span", { class: "muted" }, "@" + p.username),
-      el("button", { class: "btn sm primary", style: "margin-left:auto", onclick: async () => { await sb.from("friendships").update({ status: "accepted" }).eq("id", p.fid); await notify([p.id], "friend_accepted", "accepted your friend request"); await loadFriends(); award("friend"); await saveProfile({}); page.replaceWith(await pageFriends()); } }, "Accept"),
+      el("button", { class: "btn sm primary", style: "margin-left:auto", onclick: async () => { await sb.from("friendships").update({ status: "accepted" }).eq("id", p.fid); await notify([p.id], "friend_accepted", "accepted your friend request"); await loadFriends(); { const st = stats(me); st.rewarded_friends = st.rewarded_friends || []; if (!st.rewarded_friends.includes(p.id)) { award("friend"); st.rewarded_friends.push(p.id); } } await saveProfile({ stats: me.stats }); page.replaceWith(await pageFriends()); } }, "Accept"),
       el("button", { class: "btn sm ghost", onclick: async () => { await sb.from("friendships").delete().eq("id", p.fid); page.replaceWith(await pageFriends()); } }, "Ignore")))));
     if (pendingOut.length) page.append(el("p", { class: "muted small" }, "Waiting on: " + pendingOut.map(p => p.display_name).join(", ")));
     if (!friends.length) page.append(el("div", { class: "card", style: "text-align:center;padding:40px" }, el("h2", {}, "No friends yet"), el("p", { class: "muted" }, "Add one above. Your first friend earns you a badge and coins.")));
@@ -511,8 +604,9 @@
     const m = metrics(me, friends.length); const n = badgeCount(me); const total = BADGES.length;
     const ach = BADGES.filter(b => !b.monthly); const earnedKeys = new Set((me.badges || []).map(b => b.key));
     const nextUnlock = [...ACCENTS.map(a => ({ name: a.name + " accent", need: a.need })), ...BANNERS.filter(b => b.need).map(b => ({ name: b.name + " banner", need: b.need })), ...AVATAR_SETS.filter(a => a.need).map(a => ({ name: a.set + " avatars", need: a.need }))].filter(x => x.need > n).sort((a, b) => a.need - b.need)[0];
+    const nextFrame = FRAMES.find(f => f.level > levelOf(me.xp || 0));
     const page = el("div", { class: "stack" });
-    page.append(el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "Badges"), el("p", { class: "sub" }, `${n} of ${total} earned. ` + (nextUnlock ? `Next unlock at ${nextUnlock.need}: ${nextUnlock.name}.` : "You've unlocked everything.")))));
+    page.append(el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "Badges"), el("p", { class: "sub" }, `${n} of ${total} earned. ` + (nextUnlock ? `Next unlock at ${nextUnlock.need}: ${nextUnlock.name}.` : "You've unlocked everything.") + (nextFrame ? ` Next frame at level ${nextFrame.level}: ${nextFrame.name}.` : "")))));
     page.append(el("div", { class: "progress" }, el("i", { style: `width:${(n / total) * 100}%` })));
     // monthly
     const mk = monthKey(); const monthDone = m.months.includes(mk); const cur = BADGE_BY_KEY["month_" + mk];
@@ -602,8 +696,13 @@
   async function pageProfile() {
     const n = badgeCount(me);
     const name = el("input", { class: "input", value: me.display_name }), tag = el("input", { class: "input", value: me.tagline || "", placeholder: "One line about you as a reader", maxlength: 80 });
-    let accent = me.accent || "green", avatar = me.avatar, banner = me.banner || "plain";
+    let accent = me.accent || "green", avatar = me.avatar, banner = me.banner || "plain", frame = me.frame || "none";
     const page = el("div", { class: "stack" });
+    const myLevel = levelOf(me.xp || 0);
+    const frGrid = el("div", { class: "frame-grid" });
+    const drawFrames = () => fill(frGrid, ...FRAMES.map(f => { const ok = myLevel >= f.level; return el("button", { class: "frame-opt" + (f.key === frame ? " on" : "") + (ok ? "" : " locked"), title: f.desc, onclick: () => { if (!ok) { toast(`${f.name} unlocks at level ${f.level}.`); return; } frame = f.key; drawFrames(); } },
+      avatarEl(me, "lg", f.key), el("div", { class: "bn-name" }, f.name), el("small", { class: "muted" }, ok ? (f.key === frame ? "Selected" : "Unlocked") : "Level " + f.level)); }));
+    drawFrames();
     // --- character & pet ---
     const lvl = levelOf(me.xp || 0), nextXp = xpForLevel(lvl + 1), curXp = xpForLevel(lvl), pct = Math.min(100, ((me.xp - curXp) / (nextXp - curXp)) * 100);
     const charCard = el("div", { class: "card char" },
@@ -651,12 +750,13 @@
       charCard, petCard,
       el("div", { class: "card stack" },
         el("div", { class: "field" }, el("label", {}, "Profile picture"), photoRow, el("div", { class: "hint" }, "Your picture stays yours. Badges and coins change the banner behind it, not the picture.")),
+        el("div", { class: "field" }, el("label", {}, "Frame"), el("div", { class: "hint" }, "A ring around your picture. Earned by level. " + FRAMES.filter(f => f.level > myLevel).length + " still to earn."), frGrid),
         el("div", { class: "field" }, el("label", {}, "Banner"), bnGrid),
         el("div", { class: "field" }, el("label", {}, "Name"), name),
         el("div", { class: "field" }, el("label", {}, "Tagline"), tag),
         el("div", { class: "field" }, el("label", {}, "Accent color"), sw),
         el("div", { class: "field" }, el("label", {}, "Avatar (used when there's no picture)"), av),
-        el("div", { class: "row" }, el("button", { class: "btn primary", onclick: async () => { try { await saveProfile({ display_name: name.value.trim() || me.username, tagline: tag.value.trim(), accent, avatar, banner }); toast("Profile saved."); render(); } catch (e) { toast("Couldn't save: " + e.message); } } }, "Save profile"),
+        el("div", { class: "row" }, el("button", { class: "btn primary", onclick: async () => { try { await saveProfile({ display_name: name.value.trim() || me.username, tagline: tag.value.trim(), accent, avatar, banner, frame }); toast("Profile saved."); render(); } catch (e) { toast("Couldn't save: " + e.message); } } }, "Save profile"),
           el("a", { class: "btn ghost", href: "#/history" }, "My history"), el("button", { class: "btn ghost danger", style: "margin-left:auto", onclick: signOut }, "Log out"))),
       el("p", { class: "hint" }, "Username: @" + me.username + ". Usernames can't be changed."));
     return page;
