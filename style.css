@@ -398,3 +398,16 @@ p{margin:0}
 .fr-eternal::after{content:"✨";right:-1.1em;top:30%;font-size:1.1em}
 .me .av-frame{font-size:8px}
 .frame-opt{padding:16px 6px 10px;overflow:visible}
+
+/* v7: multiple pets + legend parade */
+.pet-row{display:flex;gap:14px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
+.pet-row.active{background:var(--accent-soft);margin:0 -20px;padding:12px 20px;border-radius:10px;border-bottom:none}
+.active-tag{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--accent);background:var(--surface);padding:2px 8px;border-radius:999px;margin-left:6px}
+.parade{position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden}
+.parade-pet{position:absolute;bottom:18vh;left:-12vw;font-size:6rem;line-height:1;animation:parade-run 3s cubic-bezier(.3,.8,.5,1) forwards;filter:drop-shadow(0 8px 18px rgba(0,0,0,.35))}
+.parade-spark{position:absolute;bottom:22vh;left:-12vw;font-size:1.6rem;animation:parade-run 3s cubic-bezier(.3,.8,.5,1) forwards, parade-spark 1.2s ease-in-out infinite;animation-delay:calc(var(--i) * 90ms), calc(var(--i) * 130ms);opacity:.9}
+.parade-name{position:absolute;bottom:10vh;left:0;right:0;text-align:center;font-family:var(--display);font-weight:700;font-size:1.6rem;color:var(--ink);text-shadow:0 2px 12px var(--ground);animation:parade-name 3s ease forwards;opacity:0}
+@keyframes parade-run{0%{transform:translateX(0) translateY(0) rotate(-6deg)}20%{transform:translateX(24vw) translateY(-6vh) rotate(6deg)}40%{transform:translateX(48vw) translateY(0) rotate(-6deg)}60%{transform:translateX(72vw) translateY(-7vh) rotate(6deg)}80%{transform:translateX(96vw) translateY(0) rotate(-4deg)}100%{transform:translateX(125vw) translateY(-4vh) rotate(0)}}
+@keyframes parade-spark{0%,100%{transform:translateY(0) scale(.8);opacity:.5}50%{transform:translateY(-3vh) scale(1.2);opacity:1}}
+@keyframes parade-name{0%{opacity:0;transform:translateY(10px)}25%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion: reduce){.parade{display:none}}

@@ -39,6 +39,10 @@
   const petXpFor = (l) => 30 * (l - 1) * (l - 1);
   const petStage = (level) => level < 3 ? 0 : level < 10 ? 1 : level < 25 ? 2 : 3;
   const PET_STAGE_NAMES = ["Egg", "Hatchling", "Companion", "Legend"];
+  const PET_MAX_LEVEL = 50;
+  const petIsLegend = (pet) => !!pet && petStage(petLevelOf(pet.xp || 0)) === 3;
+  const myPets = () => (me.pets = me.pets || []);
+  const setActivePet = (id) => { const p = myPets().find(x => x.id === id) || null; me.pet = p ? { ...p } : null; };
   const petEmoji = (pet) => { const d = PETS.find(p => p.key === pet?.type); return d ? d.stages[petStage(petLevelOf(pet.xp || 0))] : ""; };
 
   // ---------- banners (the thing that changes with badges/coins) ----------
@@ -194,9 +198,9 @@
       custom: cats.filter(c => c.custom).length, full: cats.filter(c => (c.books || []).length >= MAX_PER_CATEGORY).length,
       series: allBooks(p).filter(b => b.kind === "series").length + recs.filter(r => r.kind === "series").length,
       covers: allBooks(p).filter(b => b.cover).length, excited: allBooks(p).filter(b => b.excited).length,
-      level: levelOf(p.xp || 0), petLevel: p.pet ? petLevelOf(p.pet.xp || 0) : 0, coinsEarned: p.coins_earned || 0,
+      level: levelOf(p.xp || 0), petLevel: Math.max(0, ...((p.pets && p.pets.length ? p.pets : (p.pet ? [p.pet] : [])).map(x => petLevelOf(x.xp || 0)))), coinsEarned: p.coins_earned || 0,
       visits: st.visits || 0, visitStreak: st.visit_streak || 0, freshMonths: (st.fresh_months || []).length,
-      photo: p.photo_url ? 1 : 0, banner: p.banner && p.banner !== "plain" ? 1 : 0, pet: p.pet ? 1 : 0, tagline: p.tagline ? 1 : 0,
+      photo: p.photo_url ? 1 : 0, banner: p.banner && p.banner !== "plain" ? 1 : 0, pet: (p.pets && p.pets.length) || p.pet ? 1 : 0, tagline: p.tagline ? 1 : 0,
       months,
     };
   }
@@ -304,7 +308,7 @@
     const coverCount = allBooks(draft).filter(b => b.cover).length; const paidCovers = st.covers_rewarded || 0;
     if (coverCount > paidCovers) { award("cover", coverCount - paidCovers); st.covers_rewarded = coverCount; }
     // The save bonus and pet growth happen once a day, no matter how many times you save.
-    if (st.last_save_reward_day !== today) { award("save"); st.last_save_reward_day = today; if (me.pet) me.pet.xp = (me.pet.xp || 0) + 5; }
+    if (st.last_save_reward_day !== today) { award("save"); st.last_save_reward_day = today; const ap = me.pet && myPets().find(x => x.id === me.pet.id); if (ap) { ap.xp = (ap.xp || 0) + 5; setActivePet(ap.id); } }
     const months = [...new Set([...(me.months_updated || []), mk])];
     if (!(me.months_updated || []).includes(mk)) {
       award("month");
@@ -323,7 +327,7 @@
         if (targets.length) st.shelf_notice_count = (st.shelf_notice_count || 0) + 1;
       }
     }
-    await saveProfile({ categories: draft.categories, recommendations: draft.recommendations, months_updated: months, pet: me.pet, stats: st });
+    await saveProfile({ categories: draft.categories, recommendations: draft.recommendations, months_updated: months, pet: me.pet, pets: myPets(), stats: st });
     if (targets.length) await notify(targets, "shelf", "updated their shelf");
     await sb.from("history").upsert({ user_id: me.id, month: mk, snapshot: { categories: draft.categories, recommendations: draft.recommendations } }, { onConflict: "user_id,month" });
     dirty = false; toast(targets.length ? "Shelf saved. Your friends will get a notice." : "Shelf saved.");
@@ -416,6 +420,14 @@
   function pickImage(cb) {
     const inp = el("input", { type: "file", accept: "image/*", style: "display:none", onchange: () => { if (inp.files[0]) cb(inp.files[0]); inp.remove(); } });
     document.body.append(inp); inp.click();
+  }
+
+  // ---------- fully evolved pet parade (short, once per profile visit) ----------
+  function petParade(pet) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const em = petEmoji(pet); const layer = el("div", { class: "parade" });
+    layer.append(el("div", { class: "parade-pet" }, em), ...Array.from({ length: 7 }, (_, i) => el("span", { class: "parade-spark", style: `--i:${i}` }, ["✨", "⭐", "💫"][i % 3])), el("div", { class: "parade-name" }, pet.name));
+    document.body.append(layer); setTimeout(() => layer.remove(), 3200);
   }
 
   // ---------- shared title suggestions ----------
@@ -757,24 +769,33 @@
           el("div", { class: "progress" }, el("i", { style: `width:${pct}%` })), el("div", { class: "muted small" }, `${me.xp || 0} XP · ${nextXp - (me.xp || 0)} to level ${lvl + 1}`),
           el("p", { class: "muted small", style: "margin-top:6px" }, "Earn XP and coins by adding books, saving your shelf each month, making friends, reading recommendations, and collecting badges. Spend coins on your pet and banners."))));
     const petCard = el("div", { class: "card" });
+    async function savePets() { await saveProfile({ pet: me.pet, pets: myPets() }); drawPet(); updateTopbar(); }
+    function petRow(pet) {
+      const pt = PETS.find(p => p.key === pet.type) || PETS[0]; const pl = petLevelOf(pet.xp || 0), stage = petStage(pl);
+      const next = petXpFor(Math.min(PET_MAX_LEVEL, pl + 1)), cur = petXpFor(pl), ppct = pl >= PET_MAX_LEVEL ? 100 : Math.min(100, ((pet.xp - cur) / (next - cur)) * 100);
+      const active = me.pet && me.pet.id === pet.id;
+      return el("div", { class: "pet-row" + (active ? " active" : "") },
+        el("div", { class: "pet-big" }, pt.stages[stage]),
+        el("div", { style: "flex:1;min-width:200px" },
+          el("div", { class: "lvl-line" }, el("b", {}, pet.name), el("span", { class: "muted" }, ` · ${pt.name} · ${PET_STAGE_NAMES[stage]} · Lv ${pl}`), active ? el("span", { class: "active-tag" }, "On your profile") : null),
+          el("div", { class: "progress pet" }, el("i", { style: `width:${ppct}%` })),
+          el("div", { class: "muted small" }, pl >= PET_MAX_LEVEL ? "Max level." : `${pet.xp || 0} XP · ${next - (pet.xp || 0)} to level ${pl + 1}` + (stage < 3 ? ` · next stage at Lv ${[3, 10, 25][stage]}` : " · fully evolved")),
+          el("div", { class: "row", style: "margin-top:10px" },
+            el("button", { class: "btn sm primary", disabled: (me.coins || 0) < PET_FEED_COST || pl >= PET_MAX_LEVEL, onclick: async (e) => { e.target.disabled = true; me.coins -= PET_FEED_COST; pet.xp = (pet.xp || 0) + PET_FEED_XP; if (active) setActivePet(pet.id); try { await savePets(); if (petLevelOf(pet.xp) > pl) toast(`${pt.stages[petStage(petLevelOf(pet.xp))]} ${pet.name} reached level ${petLevelOf(pet.xp)}!`, "badge-toast"); } catch (ex) { toast(ex.message); } } }, `Feed · ${PET_FEED_COST} coins`),
+            active ? null : el("button", { class: "btn sm", onclick: async () => { setActivePet(pet.id); await savePets(); } }, "Put on profile"),
+            el("button", { class: "btn sm ghost", onclick: async () => { const nm = prompt("Rename your pet:", pet.name); if (!nm) return; pet.name = nm.trim().slice(0, 20); if (active) setActivePet(pet.id); await savePets(); } }, "Rename"),
+            el("button", { class: "btn sm ghost danger", onclick: async () => { if (!confirm("Release " + pet.name + "? Their levels are gone for good.")) return; me.pets = myPets().filter(x => x.id !== pet.id); if (active) setActivePet(me.pets[0]?.id); await savePets(); } }, "Release"))));
+    }
     function drawPet() {
-      if (!me.pet) {
-        fill(petCard, el("div", { class: "eyebrow" }, "Adopt a pet"), el("p", { class: "muted small" }, "Your pet grows every time you save your shelf, and faster when you feed it coins. The first one is free."),
-          el("div", { class: "pet-choices" }, ...PETS.map(pt => el("button", { class: "pet-choice", onclick: async () => { const nm = prompt(`Name your ${pt.name.toLowerCase()}:`, pt.name); if (nm == null) return; if (pt.cost && (me.coins || 0) < pt.cost) { toast(`Needs ${pt.cost} coins.`); return; } me.coins = (me.coins || 0) - pt.cost; try { await saveProfile({ pet: { type: pt.key, name: nm.trim().slice(0, 20) || pt.name, xp: 0 } }); drawPet(); } catch (e) { toast(e.message); } } }, el("span", { class: "pe" }, pt.stages[2]), el("b", {}, pt.name), el("small", {}, pt.cost ? pt.cost + " coins" : "Free")))));
-        return;
-      }
-      const pt = PETS.find(p => p.key === me.pet.type) || PETS[0]; const pl = petLevelOf(me.pet.xp || 0), stage = petStage(pl);
-      const next = petXpFor(pl + 1), cur = petXpFor(pl), ppct = Math.min(100, ((me.pet.xp - cur) / (next - cur)) * 100);
-      fill(petCard, el("div", { class: "eyebrow" }, "Your pet"),
-        el("div", { class: "row", style: "margin-top:6px;align-items:flex-start" }, el("div", { class: "pet-big" }, pt.stages[stage]),
-          el("div", { style: "flex:1;min-width:200px" }, el("div", { class: "lvl-line" }, el("b", {}, me.pet.name), el("span", { class: "muted" }, ` · ${pt.name} · ${PET_STAGE_NAMES[stage]} · Lv ${pl}`)),
-            el("div", { class: "progress pet" }, el("i", { style: `width:${ppct}%` })), el("div", { class: "muted small" }, `${me.pet.xp || 0} XP · ${next - (me.pet.xp || 0)} to level ${pl + 1}` + (stage < 3 ? ` · next stage at Lv ${[3, 10, 25][stage]}` : " · fully grown")),
-            el("div", { class: "row", style: "margin-top:10px" },
-              el("button", { class: "btn sm primary", disabled: (me.coins || 0) < PET_FEED_COST, onclick: async (e) => { e.target.disabled = true; me.coins -= PET_FEED_COST; me.pet.xp = (me.pet.xp || 0) + PET_FEED_XP; const before = pl; try { await saveProfile({ pet: me.pet }); if (petLevelOf(me.pet.xp) > before) toast(`${petEmoji(me.pet)} ${me.pet.name} reached level ${petLevelOf(me.pet.xp)}!`, "badge-toast"); } catch (ex) { toast(ex.message); } drawPet(); updateTopbar(); } }, `Feed · ${PET_FEED_COST} coins`),
-              el("button", { class: "btn sm ghost", onclick: async () => { const nm = prompt("Rename your pet:", me.pet.name); if (!nm) return; me.pet.name = nm.trim().slice(0, 20); await saveProfile({ pet: me.pet }); drawPet(); } }, "Rename"),
-              el("button", { class: "btn sm ghost danger", onclick: () => { if (confirm("Release " + me.pet.name + "? Their levels are gone for good.")) saveProfile({ pet: null }).then(drawPet); } }, "Release")))));
+      const pets = myPets(); const firstFree = pets.length === 0;
+      fill(petCard, el("div", { class: "eyebrow" }, pets.length ? "Your pets" : "Adopt a pet"),
+        pets.length ? el("p", { class: "muted small" }, "You can keep as many as you like, but only one goes on your profile. It grows every time you save your shelf, and any pet grows when you feed it coins.") : el("p", { class: "muted small" }, "Your pet grows every time you save your shelf, and faster when you feed it coins. The first one is free."),
+        ...pets.map(petRow),
+        el("div", { class: "eyebrow", style: "margin-top:14px" }, pets.length ? "Adopt another" : "Choose one"),
+        el("div", { class: "pet-choices" }, ...PETS.map(pt => { const cost = firstFree ? 0 : Math.max(100, pt.cost); return el("button", { class: "pet-choice", onclick: async () => { const nm = prompt(`Name your ${pt.name.toLowerCase()}:`, pt.name); if (nm == null) return; if (cost && (me.coins || 0) < cost) { toast(`Needs ${cost} coins. You have ${me.coins || 0}.`); return; } me.coins = (me.coins || 0) - cost; const np = { id: uid(), type: pt.key, name: nm.trim().slice(0, 20) || pt.name, xp: 0 }; myPets().push(np); if (!me.pet) setActivePet(np.id); try { await savePets(); } catch (e) { toast(e.message); } } }, el("span", { class: "pe" }, pt.stages[2]), el("b", {}, pt.name), el("small", {}, cost ? cost + " coins" : "Free")); })));
     }
     drawPet();
+    if (petIsLegend(me.pet)) petParade(me.pet);
     // --- look ---
     const sw = el("div", { class: "swatches" }), av = el("div", { class: "stack" }), bnGrid = el("div", { class: "banner-grid" });
     const drawSw = () => fill(sw, ...ACCENTS.map(a => el("button", { class: "swatch" + (a.key === accent ? " on" : "") + (n < a.need ? " locked" : ""), style: `background:${a.hex}`, title: n < a.need ? `${a.name} — unlocks at ${a.need} badges` : a.name, onclick: () => { if (n < a.need) { toast(`${a.name} unlocks at ${a.need} badges.`); return; } accent = a.key; document.documentElement.dataset.accent = accent; drawSw(); } })));
@@ -839,6 +860,6 @@
     await render();
     setInterval(() => { if (me) loadNotices(); }, 60000);
   }
-  window.__shelfmates = { cropImage };
+  window.__shelfmates = { cropImage, petParade };
   boot();
 })();
