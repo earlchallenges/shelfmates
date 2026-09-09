@@ -325,7 +325,6 @@ p{margin:0}
 .fr-rosegold{--frame-bg:linear-gradient(135deg,#B76E79,#F5C6CB 45%,#C58A92 60%,#FBE3E6);--frame-inner:#FFF6F7}
 .fr-laurel{--frame-bg:repeating-conic-gradient(#F5EFE0 0 6deg,#B9A77A 6deg 12deg);--frame-inner:#F5EFE0}
 .fr-midnight{--frame-bg:radial-gradient(circle at 20% 20%,#fff 0 1px,transparent 1.5px),radial-gradient(circle at 70% 30%,#fff 0 1px,transparent 1.5px),radial-gradient(circle at 40% 80%,#fff 0 .8px,transparent 1.3px),radial-gradient(circle at 85% 70%,#fff 0 1px,transparent 1.5px),#0F172A;--frame-inner:#334155}
-.fr-aurora{--frame-bg:conic-gradient(#0B2540,#1E6E6E,#63B58F,#B99AD6,#0B2540);--frame-glow:0 0 10px rgba(99,181,143,.5)}
 .fr-dragon{--frame-bg:repeating-conic-gradient(#7F1D1D 0 20deg,#F59E0B 20deg 26deg,#DC2626 26deg 40deg);--frame-glow:0 0 12px rgba(220,38,38,.55);--frame-inner:#FDE68A}
 .fr-platinum{--frame-bg:linear-gradient(135deg,#CBD5E1,#FFFFFF 35%,#94A3B8 55%,#F8FAFC);--frame-inner:#E2E8F0;--frame-glow:0 0 0 1px #94A3B8}
 .fr-ocean{--frame-bg:conic-gradient(from 120deg,#0E7490,#67E8F9 25%,#0E7490 50%,#A5F3FC 70%,#0E7490);--frame-inner:#CFFAFE}
@@ -338,7 +337,7 @@ p{margin:0}
 .fr-mythic{--frame-bg:conic-gradient(#4C1D95,#F1D17A,#7C3AED,#FDE68A,#4C1D95);--frame-glow:0 0 18px rgba(124,58,237,.7);--frame-inner:#FDE68A;--fi:2px}
 .fr-eternal{--frame-bg:conic-gradient(#FFFFFF,#FDE68A,#FFFFFF,#F1D17A,#FFFFFF);--frame-glow:0 0 20px rgba(253,230,138,.9);--frame-inner:#fff;--fi:2px}
 @media (prefers-reduced-motion: no-preference){
-  .fr-aurora,.fr-prism,.fr-eternal,.fr-celestial,.fr-mythic{animation:frame-spin 8s linear infinite}
+  .fr-prism,.fr-eternal,.fr-celestial,.fr-mythic{animation:frame-spin 8s linear infinite}
   .fr-amethyst,.fr-ember{animation:frame-breathe 3s ease-in-out infinite}
   @keyframes frame-spin{to{filter:hue-rotate(360deg)}}
   @keyframes frame-breathe{50%{filter:brightness(1.25)}}
@@ -362,3 +361,40 @@ p{margin:0}
 .crop-h{position:absolute;width:22px;height:22px;background:#fff;border:2px solid var(--accent);border-radius:50%;touch-action:none}
 .crop-h.nw{left:-11px;top:-11px;cursor:nwse-resize}.crop-h.ne{right:-11px;top:-11px;cursor:nesw-resize}
 .crop-h.sw{left:-11px;bottom:-11px;cursor:nesw-resize}.crop-h.se{right:-11px;bottom:-11px;cursor:nwse-resize}
+
+/* v6: frames are more than a ring — ornaments around the picture */
+.av-frame{overflow:visible;font-size:11px}
+.av-frame.lg{font-size:16px}
+.av-frame.xl{font-size:22px}
+.av-frame::before,.av-frame::after{position:absolute;pointer-events:none;line-height:1}
+/* metal frames get a square picture-frame border with corner brackets */
+.fr-bronze::before,.fr-silver::before,.fr-gold::before,.fr-platinum::before,.fr-rosegold::before,.fr-obsidian::before{content:"";inset:-.45em;border:.18em solid var(--fb,#B87333);border-radius:.35em;opacity:.95}
+.fr-bronze{--fb:#B87333}.fr-silver{--fb:#C0C4CC}.fr-gold{--fb:#D4A93A}.fr-platinum{--fb:#E2E8F0}.fr-rosegold{--fb:#E2A2AA}.fr-obsidian{--fb:#F1D17A}
+.fr-gold::after{content:"✦";top:-1.1em;left:50%;transform:translateX(-50%);color:#F1D17A;font-size:1em}
+.fr-obsidian::after{content:"◆";bottom:-1em;left:50%;transform:translateX(-50%);color:#F1D17A;font-size:.8em}
+/* nature and element frames */
+.fr-laurel::before{content:"🌿";left:-1.2em;top:15%;transform:scaleX(-1) rotate(-20deg);font-size:1.3em}
+.fr-laurel::after{content:"🌿";right:-1.2em;top:15%;transform:rotate(-20deg);font-size:1.3em}
+.fr-ember::before{content:"🔥";left:-.7em;bottom:-.5em;font-size:1.1em}
+.fr-ember::after{content:"🔥";right:-.7em;bottom:-.5em;font-size:1.1em;transform:scaleX(-1)}
+.fr-dragon::before{content:"🔥";left:-.8em;bottom:-.4em;font-size:1.3em}
+.fr-dragon::after{content:"🐉";right:-1.1em;top:-.9em;font-size:1.3em}
+.fr-sapphire::after{content:"💎";top:-1.1em;left:50%;transform:translateX(-50%);font-size:1em}
+.fr-emerald::after{content:"🍀";top:-1em;right:-.6em;font-size:1em}
+.fr-amethyst::after{content:"🔮";top:-1em;left:50%;transform:translateX(-50%);font-size:1em}
+.fr-midnight::before{content:"🌙";top:-1em;right:-.7em;font-size:1em}
+.fr-midnight::after{content:"✦";bottom:-.6em;left:-.4em;color:#fff;font-size:.8em}
+.fr-ocean::after{content:"🌊";bottom:-.9em;left:50%;transform:translateX(-50%);font-size:1.1em}
+.fr-sunburst::before{content:"";inset:-.6em;border-radius:50%;background:repeating-conic-gradient(#F59E0B 0 6deg,transparent 6deg 15deg);mask:radial-gradient(circle,transparent 62%,#000 63%);-webkit-mask:radial-gradient(circle,transparent 62%,#000 63%);opacity:.9}
+.fr-crown::after{content:"👑";top:-1.25em;left:50%;transform:translateX(-50%);font-size:1.25em}
+.fr-frost::before{content:"❄️";top:-1em;left:-.7em;font-size:.9em}
+.fr-frost::after{content:"❄️";bottom:-.8em;right:-.7em;font-size:.9em}
+.fr-prism::after{content:"🌈";top:-1.1em;left:50%;transform:translateX(-50%);font-size:1.1em}
+.fr-celestial::before{content:"✨";top:-.9em;left:-.9em;font-size:1em}
+.fr-celestial::after{content:"⭐";bottom:-.9em;right:-.9em;font-size:1em}
+.fr-mythic::before{content:"";inset:-.55em;border-radius:50%;border:.14em dashed #F1D17A;opacity:.9}
+.fr-mythic::after{content:"🐲";top:-1.2em;left:50%;transform:translateX(-50%);font-size:1.2em}
+.fr-eternal::before{content:"✨";left:-1.1em;top:30%;font-size:1.1em}
+.fr-eternal::after{content:"✨";right:-1.1em;top:30%;font-size:1.1em}
+.me .av-frame{font-size:8px}
+.frame-opt{padding:16px 6px 10px;overflow:visible}

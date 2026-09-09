@@ -70,7 +70,6 @@
     { key: "rosegold",  name: "Rose Gold",       level: 20, desc: "Pink-gold with a pearl inner edge." },
     { key: "laurel",    name: "Ivory Laurel",    level: 22, desc: "A dotted ivory wreath, like a book prize." },
     { key: "midnight",  name: "Midnight",        level: 25, desc: "Ink-dark ring scattered with tiny stars." },
-    { key: "aurora",    name: "Aurora",          level: 28, desc: "Northern lights that slowly turn around you." },
     { key: "dragon",    name: "Dragonfire",      level: 30, desc: "Red and gold flames licking the edge." },
     { key: "platinum",  name: "Platinum",        level: 32, desc: "Cool white metal, heavy and rare." },
     { key: "ocean",     name: "Ocean Glass",     level: 35, desc: "Sea-glass teal with a wave of light." },
