@@ -368,6 +368,52 @@
     if (error) throw new Error(error.message);
     return sb.storage.from("images").getPublicUrl(path).data.publicUrl;
   }
+  // Crop box with four draggable corners; drag the middle to move it. Returns a JPEG blob of the chosen area.
+  function cropImage(file, { aspect = 0, title = "Adjust the picture" } = {}) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file); const img = new Image();
+      img.onload = () => {
+        const overlay = el("div", { class: "crop-overlay" });
+        const vw = window.innerWidth || document.documentElement.clientWidth || 600, vh = window.innerHeight || document.documentElement.clientHeight || 700; const maxW = Math.max(240, Math.min(vw - 32, 720)), maxH = Math.max(200, Math.min(vh - 190, 560));
+        const sc = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+        const W = Math.round(img.naturalWidth * sc), H = Math.round(img.naturalHeight * sc);
+        const stage = el("div", { class: "crop-stage", style: `width:${W}px;height:${H}px` }, el("img", { src: url, alt: "", draggable: false }));
+        const box = el("div", { class: "crop-box" }, ...["nw", "ne", "sw", "se"].map(c => el("span", { class: "crop-h " + c, "data-c": c })));
+        stage.append(box);
+        // start with a centered box
+        let bw = W * 0.8, bh = aspect ? bw / aspect : H * 0.8; if (bh > H * 0.9) { bh = H * 0.9; bw = aspect ? bh * aspect : bw; }
+        let r = { x: (W - bw) / 2, y: (H - bh) / 2, w: bw, h: bh };
+        const MIN = 24;
+        const apply = () => { r.w = Math.max(MIN, Math.min(r.w, W)); r.h = Math.max(MIN, Math.min(r.h, H)); r.x = Math.max(0, Math.min(r.x, W - r.w)); r.y = Math.max(0, Math.min(r.y, H - r.h)); Object.assign(box.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" }); };
+        apply();
+        let drag = null;
+        box.addEventListener("pointerdown", (e) => { e.preventDefault(); try { box.setPointerCapture(e.pointerId); } catch (_) {} drag = { corner: e.target.dataset.c || null, sx: e.clientX, sy: e.clientY, start: { ...r } }; });
+        box.addEventListener("pointermove", (e) => {
+          if (!drag) return; const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy; const s0 = drag.start;
+          if (!drag.corner) { r.x = s0.x + dx; r.y = s0.y + dy; apply(); return; }
+          let x = s0.x, y = s0.y, w = s0.w, h = s0.h;
+          if (drag.corner.includes("e")) w = s0.w + dx; if (drag.corner.includes("s")) h = s0.h + dy;
+          if (drag.corner.includes("w")) { x = s0.x + dx; w = s0.w - dx; } if (drag.corner.includes("n")) { y = s0.y + dy; h = s0.h - dy; }
+          if (aspect) { const nw = Math.max(w, h * aspect); const nh = nw / aspect; if (drag.corner.includes("w")) x = s0.x + s0.w - nw; if (drag.corner.includes("n")) y = s0.y + s0.h - nh; w = nw; h = nh; }
+          if (w < MIN) { if (drag.corner.includes("w")) x = s0.x + s0.w - MIN; w = MIN; } if (h < MIN) { if (drag.corner.includes("n")) y = s0.y + s0.h - MIN; h = MIN; }
+          r = { x, y, w, h }; apply();
+        });
+        box.addEventListener("pointerup", () => { drag = null; }); box.addEventListener("pointercancel", () => { drag = null; });
+        const done = (ok) => { overlay.remove(); URL.revokeObjectURL(url); if (!ok) return reject(new Error("cancelled"));
+          const c = document.createElement("canvas"); const k = 1 / sc; const outW = Math.round(r.w * k), outH = Math.round(r.h * k); const lim = Math.min(1, 1200 / Math.max(outW, outH));
+          c.width = Math.round(outW * lim); c.height = Math.round(outH * lim);
+          c.getContext("2d").drawImage(img, r.x * k, r.y * k, outW, outH, 0, 0, c.width, c.height);
+          c.toBlob(b => b ? resolve(b) : reject(new Error("Couldn't crop that image.")), "image/jpeg", 0.88); };
+        fill(overlay, el("div", { class: "crop-panel" }, el("div", { class: "crop-title" }, title, el("span", { class: "muted small" }, " · drag the corners, or drag the middle to move")), stage,
+          el("div", { class: "row", style: "justify-content:flex-end;margin-top:12px" }, el("button", { class: "btn ghost", onclick: () => done(false) }, "Cancel"), el("button", { class: "btn", onclick: () => { r = { x: 0, y: 0, w: W, h: H }; if (aspect) { if (W / H > aspect) { r.w = H * aspect; r.x = (W - r.w) / 2; } else { r.h = W / aspect; r.y = (H - r.h) / 2; } } apply(); } }, "Whole picture"), el("button", { class: "btn primary", onclick: () => done(true) }, "Use this"))));
+        document.body.append(overlay);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file isn't an image.")); };
+      img.src = url;
+    });
+  }
+  // pick a file, then crop it. cb gets the cropped blob. Nothing happens if the person cancels.
+  function pickAndCrop(opts, cb) { pickImage(async (f) => { try { cb(await cropImage(f, opts)); } catch (e) { if (e.message !== "cancelled") toast(e.message); } }); }
   function pickImage(cb) {
     const inp = el("input", { type: "file", accept: "image/*", style: "display:none", onchange: () => { if (inp.files[0]) cb(inp.files[0]); inp.remove(); } });
     document.body.append(inp); inp.click();
@@ -442,7 +488,7 @@
   const kindPill = (item, editable, onToggle) => el("button", { class: "kind " + (item.kind === "series" ? "series" : "book"), title: editable ? "Click to switch between book and series" : "", disabled: !editable, onclick: (e) => { e.preventDefault(); if (editable) onToggle(); } }, item.kind === "series" ? "Series" : "Book");
   function coverEl(b, editable, onChange) {
     const c = el("span", { class: "cover" + (editable ? " editable" : ""), title: editable ? "Add a cover picture" : "" }, b.cover ? el("img", { src: b.cover, alt: "" }) : el("span", { class: "cover-ph" }, "📕"));
-    if (editable) c.addEventListener("click", () => pickImage(async (f) => { try { c.classList.add("busy"); const url = await uploadImage(f, "cover", 400); onChange(url); } catch (e) { toast(e.message); } finally { c.classList.remove("busy"); } }));
+    if (editable) c.addEventListener("click", () => pickAndCrop({ title: "Adjust the cover" }, async (blob) => { try { c.classList.add("busy"); const url = await uploadImage(blob, "cover", 500); onChange(url); } catch (e) { toast(e.message); } finally { c.classList.remove("busy"); } }));
     return c;
   }
 
@@ -506,14 +552,14 @@
       const t = el("input", { class: "input", placeholder }), a = el("input", { class: "input", placeholder: "Author (optional)" });
       const setKind = (k) => { kind = k; kindBtn.textContent = kind === "book" ? "Book" : "Series"; kindBtn.classList.toggle("series", kind === "series"); };
       const kindBtn = el("button", { class: "kind-toggle", type: "button", onclick: () => setKind(kind === "book" ? "series" : "book") }, "Book");
-      const picBtn = el("button", { class: "btn sm pic-btn", type: "button", title: "Attach a cover picture", onclick: () => pickImage((f) => { pendingFile = f; pendingCover = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); }) }, "📷");
+      const picBtn = el("button", { class: "btn sm pic-btn", type: "button", title: "Attach a cover picture", onclick: () => pickAndCrop({ title: "Adjust the cover" }, (blob) => { pendingFile = blob; pendingCover = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); }) }, "📷");
       const wrap = el("div", { class: "suggest-wrap" }, t);
       attachSuggest(t, (hit) => { t.value = hit.title; if (hit.author && !a.value) a.value = hit.author; setKind(hit.kind === "series" ? "series" : "book"); if (hit.cover) { pendingCover = hit.cover; pendingFile = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); } });
       const addBtn = el("button", { class: "btn sm", type: "submit" }, "Add");
       return el("form", { class: "add-book", onsubmit: async (e) => {
         e.preventDefault(); if (!t.value.trim()) return;
         let cover = pendingCover;
-        if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 400); } catch (ex) { toast("Picture didn't upload: " + ex.message); } addBtn.disabled = false; addBtn.textContent = "Add"; }
+        if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 500); } catch (ex) { toast("Picture didn't upload: " + ex.message); } addBtn.disabled = false; addBtn.textContent = "Add"; }
         onAdd({ title: t.value.trim(), author: a.value.trim(), kind, cover: cover || undefined });
       } }, wrap, a, el("div", { class: "row", style: "gap:6px" }, kindBtn, picBtn, addBtn));
     }
@@ -547,7 +593,7 @@
       let kind = "book", pendingFile = null, pendingCover = null;
       const setKind = (k) => { kind = k; kindBtn.textContent = kind === "book" ? "Book" : "Series"; kindBtn.classList.toggle("series", kind === "series"); };
       const kindBtn = el("button", { class: "kind-toggle", type: "button", onclick: () => setKind(kind === "book" ? "series" : "book") }, "Book");
-      const picBtn = el("button", { class: "btn sm pic-btn", type: "button", title: "Attach a cover picture", onclick: () => pickImage((f) => { pendingFile = f; pendingCover = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); }) }, "📷");
+      const picBtn = el("button", { class: "btn sm pic-btn", type: "button", title: "Attach a cover picture", onclick: () => pickAndCrop({ title: "Adjust the cover" }, (blob) => { pendingFile = blob; pendingCover = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); }) }, "📷");
       const twrap = el("div", { class: "suggest-wrap" }, t);
       attachSuggest(t, (hit) => { t.value = hit.title; if (hit.author && !a.value) a.value = hit.author; setKind(hit.kind === "series" ? "series" : "book"); if (hit.cover) { pendingCover = hit.cover; pendingFile = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); } });
       const addBtn = el("button", { class: "btn sm", type: "submit" }, "Add");
@@ -556,7 +602,7 @@
         el("p", { class: "muted small" }, `Up to ${MAX_PER_CATEGORY}. Friends can mark one as read and you both earn coins.`), el("div", { class: "sep" }),
         ...list.map((r, i) => el("div", { class: "rec" }, coverEl(r, true, (url) => { r.cover = url; markDirty(); drawRecs(); }), el("div", {}, el("div", { class: "title" }, r.title, r.author ? el("small", { class: "muted" }, " · " + r.author) : null), el("div", { class: "row", style: "gap:6px;margin-top:2px" }, kindPill(r, true, () => { r.kind = r.kind === "series" ? "book" : "series"; markDirty(); drawRecs(); }), r.note ? el("span", { class: "note" }, r.note) : null)),
           el("button", { class: "icon-btn", title: "Remove", onclick: () => { list.splice(i, 1); markDirty(); drawRecs(); } }, "✕"))),
-        list.length < MAX_PER_CATEGORY ? el("form", { class: "add-book rec-add", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) return; let cover = pendingCover; if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 400); } catch (ex) { toast("Picture didn't upload: " + ex.message); } } list.push({ id: uid(), title: t.value.trim(), author: a.value.trim(), note: n.value.trim(), kind, cover: cover || undefined }); markDirty(); drawRecs(); } }, twrap, a, n, el("div", { class: "row", style: "gap:6px" }, kindBtn, picBtn, addBtn)) : el("p", { class: "muted small" }, "That's 10. Remove one to add another."));
+        list.length < MAX_PER_CATEGORY ? el("form", { class: "add-book rec-add", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) return; let cover = pendingCover; if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 500); } catch (ex) { toast("Picture didn't upload: " + ex.message); } } list.push({ id: uid(), title: t.value.trim(), author: a.value.trim(), note: n.value.trim(), kind, cover: cover || undefined }); markDirty(); drawRecs(); } }, twrap, a, n, el("div", { class: "row", style: "gap:6px" }, kindBtn, picBtn, addBtn)) : el("p", { class: "muted small" }, "That's 10. Remove one to add another."));
     }
     function drawAll() { drawShelf(); drawRecs(); drawSave(); }
     drawAll(); return page;
@@ -743,7 +789,7 @@
       } }, el("div", { class: "banner-preview", style: "background:" + b.css }), el("div", { class: "bn-name" }, b.name), el("small", { class: "muted" }, owned ? (b.key === banner ? "Selected" : "Owned") : b.cost ? `🪙 ${b.cost}` : `${b.need} badges`)); }));
     drawSw(); drawAv(); drawBanners();
     const photoRow = el("div", { class: "row" }, avatarEl(me, "lg"),
-      el("button", { class: "btn sm", onclick: () => pickImage(async (f) => { try { toast("Uploading…"); const url = await uploadImage(f, "photo", 512); await saveProfile({ photo_url: url }); updateTopbar(); page.replaceWith(await pageProfile()); } catch (e) { toast("Upload failed: " + e.message); } }) }, me.photo_url ? "Change picture" : "Add a picture"),
+      el("button", { class: "btn sm", onclick: () => pickAndCrop({ aspect: 1, title: "Adjust your picture" }, async (blob) => { try { toast("Uploading…"); const url = await uploadImage(blob, "photo", 512); await saveProfile({ photo_url: url }); updateTopbar(); page.replaceWith(await pageProfile()); } catch (e) { toast("Upload failed: " + e.message); } }) }, me.photo_url ? "Change picture" : "Add a picture"),
       me.photo_url ? el("button", { class: "btn sm ghost", onclick: async () => { await saveProfile({ photo_url: null }); updateTopbar(); page.replaceWith(await pageProfile()); } }, "Remove") : null);
     page.append(
       el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "My profile"), el("p", { class: "sub" }, "Your character, your pet, and your look. More badges and coins, more choices."))),
@@ -794,5 +840,6 @@
     await render();
     setInterval(() => { if (me) loadNotices(); }, 60000);
   }
+  window.__shelfmates = { cropImage };
   boot();
 })();
