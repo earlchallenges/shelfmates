@@ -292,6 +292,10 @@
       el("div", { class: "bm-body" }, def.charm ? el("span", { class: "bm-charm" }, def.charm) : null), el("div", { class: "bm-tassel" }));
     return b;
   }
+  const bookmarkForTitle = (p, title) => { const t = (title || "").trim().toLowerCase(); const x = (p.tbr || []).find(b => b.reading && b.bookmark && (b.title || "").trim().toLowerCase() === t); return x && BOOKMARK_BY[x.bookmark] ? BOOKMARK_BY[x.bookmark] : null; };
+  const readingOf = (p, title) => { const t = (title || "").trim().toLowerCase(); return (p.tbr || []).find(b => b.reading && (b.title || "").trim().toLowerCase() === t) || null; };
+  const readingPill = (p, item) => { const r = readingOf(p, item.title); return r ? el("span", { class: "reading-pill", title: "Reading now" }, "📖 " + (r.progress || 0) + "%") : null; };
+  const coverWithBookmark = (p, item, editable, onChange) => { const bm = bookmarkForTitle(p, item.title); return bm ? el("span", { class: "cover-wrap" }, coverEl(item, editable, onChange), bookmarkEl(bm, "xs")) : coverEl(item, editable, onChange); };
   function goalMonths(goals, level) { return new Set(goals.filter(g => g.done && (!level || g.level === level)).map(g => (g.doneAt || "").slice(0, 7))); }
   // how many designs in a tier you may choose from right now
   function choicesFor(tier, goals) {
@@ -327,7 +331,7 @@
     const owned = new Set(myBookmarks()); const goals = me.goals || [];
     const tiers = ["easy", "medium", "hard", "legend"]; let pageIx = 0;
     const overlay = el("div", { class: "crop-overlay", onclick: (e) => { if (e.target === overlay) overlay.remove(); } });
-    const book = el("div", { class: "bm-book" });
+    const book = el("div", { class: "bm-book", style: "--bookbg:" + bannerOf(me).css });
     const readingBooks = () => (me.tbr || []).filter(x => x.reading);
     function draw() {
       const tier = tiers[pageIx]; const pool = BOOKMARKS.filter(b => b.tier === tier); const n = tier === "legend" ? pool.length : choicesFor(tier, goals);
@@ -351,7 +355,7 @@
       const menu = el("div", { class: "crop-panel", style: "max-width:420px" }, el("h2", {}, "Put " + b.name + " in…"), ...rb.map(x => el("button", { class: "btn", style: "display:flex;width:100%;margin-top:8px;justify-content:flex-start", onclick: async () => { x.bookmark = b.key; await saveProfile({ tbr: me.tbr }); m2.remove(); overlay.remove(); toast(`🔖 ${b.name} is in "${x.title}"`); if (typeof window.__redrawTbr === "function") window.__redrawTbr(); } }, x.title)), el("button", { class: "btn ghost", style: "margin-top:10px", onclick: () => m2.remove() }, "Cancel"));
       const m2 = el("div", { class: "crop-overlay", onclick: (e) => { if (e.target === m2) m2.remove(); } }, menu); document.body.append(m2);
     }
-    fill(overlay, el("div", { class: "bm-book-wrap" }, book, el("button", { class: "icon-btn bm-close", onclick: () => overlay.remove() }, "✕"))); document.body.append(overlay); draw();
+    fill(overlay, el("div", { class: "bm-book-wrap" }, el("div", { class: "bm-book-title", style: "background:" + bannerOf(me).css }, el("span", {}, (me.display_name || me.username) + "'s bookmarks"), el("span", { class: "small" }, `${myBookmarks().length} of ${BOOKMARKS.length}`)), book, el("button", { class: "icon-btn bm-close", onclick: () => overlay.remove() }, "✕"))); document.body.append(overlay); draw();
   }
 
   // ---------- state & helpers ----------
@@ -823,8 +827,8 @@
         books.forEach((b, bi) => {
           list.append(el("li", { class: "book" },
             el("span", { class: "rank" + (bi === 0 ? " top" : "") }, bi + 1),
-            coverEl(b, true, (url) => { b.cover = url; markDirty(); drawShelf(); }),
-            el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null),
+            coverWithBookmark(me, b, true, (url) => { b.cover = url; markDirty(); drawShelf(); }),
+            el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null, readingPill(me, b)),
               el("div", { class: "author" }, kindPill(b, true, () => { b.kind = b.kind === "series" ? "book" : "series"; markDirty(); drawShelf(); }), contentSelect(b, () => markDirty()), b.author ? " " + b.author : "")),
             el("div", { class: "tools" },
               el("button", { class: "icon-btn", title: "Quotes, notes and journal for this book", onclick: () => openNotes(b.title, b.author) }, "📝"),
@@ -894,7 +898,7 @@
       el("div", { class: "friend-top" }, avatarEl(p, "lg"), el("div", {}, el("div", { class: "name" }, p.display_name), el("div", { class: "handle" }, "@" + p.username + " · Lv " + levelOf(p.xp || 0) + (p.pet ? " · " + petEmoji(p.pet) + " Lv " + petLevelOf(p.pet.xp || 0) : "")),
         el("div", { class: "updated-ago" + (fresh ? " fresh" : "") }, badgeCount(p) + " badges · updated " + ago(p.updated_at)))),
       excited ? el("div", { class: "pick", style: "background:var(--rose-soft)" }, el("span", { class: "cat", style: "color:var(--rose)" }, "Most excited about"), el("span", { class: "t" }, excited.title), excited.author ? el("span", { class: "a" }, excited.author) : null) : null,
-      ...tops.map(t => el("div", { class: "pick" }, el("span", { class: "cat" }, "#1 " + t.cat + (t.kind === "series" ? " · series" : "")), el("span", { class: "t" }, t.title, ...contentPills(t)), t.author ? el("span", { class: "a" }, t.author) : null)),
+      ...tops.map(t => el("div", { class: "pick" }, el("span", { class: "cat" }, "#1 " + t.cat + (t.kind === "series" ? " · series" : "")), el("span", { class: "t" }, t.title, ...contentPills(t), p.show_reading !== false ? readingPill(p, t) : null, p.show_reading !== false && bookmarkForTitle(p, t.title) ? el("span", { class: "pick-bm" }, bookmarkEl(bookmarkForTitle(p, t.title), "xs")) : null), t.author ? el("span", { class: "a" }, t.author) : null)),
       !tops.length ? el("p", { class: "muted small" }, "Hasn't added books yet.") : null,
       el("span", { class: "more" }, "See full card →"));
   }
@@ -953,7 +957,7 @@
     if (mine || isFriend) {
       page.append(el("div", { class: "eyebrow", style: "margin-top:10px" }, mine ? "Everything on my shelf" : "Everything on their shelf"));
       page.append(...cats.map(c => el("section", { class: "category" }, el("div", { class: "category-head" }, el("h2", {}, c.name), el("span", { class: "count" }, c.books.length + " of 10")),
-        el("ul", { class: "books" }, ...c.books.map((b, i) => el("li", { class: "book" }, el("span", { class: "rank" + (i === 0 ? " top" : "") }, i + 1), coverEl(b, false), el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null), el("div", { class: "author" }, kindPill(b, false), ...contentPills(b), b.author ? " " + b.author : "")), el("span")))))));
+        el("ul", { class: "books" }, ...c.books.map((b, i) => el("li", { class: "book" }, el("span", { class: "rank" + (i === 0 ? " top" : "") }, i + 1), (mine || p.show_reading !== false) ? coverWithBookmark(p, b, false) : coverEl(b, false), el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null, (mine || p.show_reading !== false) ? readingPill(p, b) : null), el("div", { class: "author" }, kindPill(b, false), ...contentPills(b), b.author ? " " + b.author : "")), el("span")))))));
       // reading log + public notes
       const log = p.reading_log || []; const yr = new Date().getFullYear(); const thisYear = log.filter(x => (x.finished || "").startsWith(String(yr)));
       const nowReading = (p.tbr || []).filter(x => x.reading);

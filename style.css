@@ -546,3 +546,30 @@ p{margin:0}
 .goal-lvl.hard{background:var(--rose-soft);color:var(--rose)}
 .goal-text{font-weight:600}
 @media (max-width:640px){.bm-book{grid-template-columns:1fr;background:#F6F1E4}.bm-page.left{border-right:none;border-bottom:1px solid rgba(0,0,0,.08)}.bm-slots{grid-template-columns:repeat(4,1fr)}}
+
+/* v14: bookmark polish */
+.cover-wrap .bm.xs{opacity:.72}
+.bm-book{background:var(--bookbg,#F6F1E4)}
+.bm-page{background:rgba(246,241,228,.78)}
+.bm-page.left{border-right:1px solid rgba(0,0,0,.12)}
+.bm-page.right{border-left:1px solid rgba(255,255,255,.25)}
+.tbr-row{grid-template-columns:52px auto minmax(0,1fr) auto;align-items:center}
+.tbr-row .bmeta{min-width:0}
+.tbr-row .title{overflow-wrap:anywhere}
+.tbr-row .tools{flex-wrap:wrap;justify-content:flex-end;gap:4px;max-width:190px;opacity:1}
+.prog-row{max-width:100%}
+.prog{max-width:220px;min-width:90px}
+@media (max-width:760px){
+  .tbr-row{grid-template-columns:44px auto minmax(0,1fr)}
+  .tbr-row .tools{grid-column:1 / -1;justify-content:flex-end;max-width:none;padding-top:4px;border-top:1px dashed var(--line);margin-top:4px}
+}
+.reading-pill{display:inline-block;margin-left:8px;font-size:.7rem;font-weight:700;letter-spacing:.04em;padding:1px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);vertical-align:middle;font-family:var(--body)}
+.pick-bm{display:inline-block;vertical-align:middle;margin-left:6px;position:relative;top:-4px}
+.pick-bm .bm.xs{opacity:.85}
+.cover-wrap .bm.xs{transition:transform .25s ease,opacity .25s ease}
+.book:hover .cover-wrap .bm.xs,.log-row:hover .cover-wrap .bm.xs{transform:translateY(-3px) rotate(-6deg);opacity:.95}
+.bm-book-title{display:flex;justify-content:space-between;align-items:center;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);font-family:var(--display);font-weight:700;font-size:1.15rem;padding:10px 16px;border-radius:12px 12px 0 0;border:6px solid #5B3A22;border-bottom:none}
+.bm-book-title .small{font-family:var(--body);font-weight:600;font-size:.8rem;opacity:.9}
+.bm-book{border-radius:0 0 14px 14px}
+.bm-page.right::after{content:"";position:absolute;right:0;bottom:0;width:26px;height:26px;background:linear-gradient(135deg,transparent 50%,rgba(0,0,0,.12) 50%);border-radius:0 0 12px 0}
+.bm-page{position:relative}
