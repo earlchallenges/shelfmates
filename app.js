@@ -293,6 +293,14 @@
     return b;
   }
   const bookmarkForTitle = (p, title) => { const t = (title || "").trim().toLowerCase(); const x = (p.tbr || []).find(b => b.reading && b.bookmark && (b.title || "").trim().toLowerCase() === t); return x && BOOKMARK_BY[x.bookmark] ? BOOKMARK_BY[x.bookmark] : null; };
+  // If a book already has cover art somewhere on your shelves, lists, or the shared index, carry it over.
+  function inheritCover(entry) {
+    const t = (entry.title || "").trim().toLowerCase(); if (!t) return entry;
+    const pools = [...allBooks(me), ...(me.recommendations || []), ...(me.tbr || []), ...(me.reading_log || [])];
+    const hit = pools.find(x => x !== entry && (x.title || "").trim().toLowerCase() === t && x.cover) || (titleIndex || []).find(x => (x.title || "").toLowerCase() === t && x.cover);
+    if (hit) { if (!entry.cover) entry.cover = hit.cover; if (!entry.author && hit.author) entry.author = hit.author; if (!entry.kind && hit.kind) entry.kind = hit.kind; }
+    return entry;
+  }
   const readingOf = (p, title) => { const t = (title || "").trim().toLowerCase(); return (p.tbr || []).find(b => b.reading && (b.title || "").trim().toLowerCase() === t) || null; };
   const readingPill = (p, item) => { const r = readingOf(p, item.title); return r ? el("span", { class: "reading-pill", title: "Reading now" }, "📖 " + (r.progress || 0) + "%") : null; };
   const coverWithBookmark = (p, item, editable, onChange) => { const bm = bookmarkForTitle(p, item.title); return bm ? el("span", { class: "cover-wrap" }, coverEl(item, editable, onChange), bookmarkEl(bm, "xs")) : coverEl(item, editable, onChange); };
@@ -329,19 +337,16 @@
   // the little book you flip through
   function openBookmarkBook() {
     const owned = new Set(myBookmarks()); const goals = me.goals || [];
-    const tiers = ["easy", "medium", "hard", "legend"]; let pageIx = 0;
     const overlay = el("div", { class: "crop-overlay", onclick: (e) => { if (e.target === overlay) overlay.remove(); } });
     const book = el("div", { class: "bm-book", style: "--bookbg:" + bannerOf(me).css });
     const readingBooks = () => (me.tbr || []).filter(x => x.reading);
     function draw() {
-      const tier = tiers[pageIx]; const pool = BOOKMARKS.filter(b => b.tier === tier); const n = tier === "legend" ? pool.length : choicesFor(tier, goals);
-      const have = pool.filter(b => owned.has(b.key)).length;
-      fill(book,
-        el("div", { class: "bm-page left" }, el("div", { class: "bm-page-title" }, TIER_NAMES[tier] + " bookmarks"), el("div", { class: "muted small" }, `${have} of ${pool.length} collected`),
-          el("p", { class: "muted small", style: "margin-top:10px" }, tier === "easy" ? "Finish an easy goal and pick one. Every easy or medium goal you finish unlocks another design to choose from." : tier === "medium" ? "Medium goals earn these. Medium and difficult goals unlock more choices." : tier === "hard" ? "Difficult goals only. These glow." : "Not picked. Earned by patterns of goals over time."),
-          el("div", { class: "bm-slots" }, ...pool.slice(0, Math.ceil(pool.length / 2)).map((b, i) => slot(b, i < n)))),
-        el("div", { class: "bm-page right" }, el("div", { class: "bm-slots" }, ...pool.slice(Math.ceil(pool.length / 2)).map((b, i) => slot(b, i + Math.ceil(pool.length / 2) < n))),
-          el("div", { class: "row", style: "justify-content:space-between;margin-top:auto" }, el("button", { class: "btn sm ghost", disabled: pageIx === 0, onclick: () => { pageIx--; draw(); } }, "← Prev"), el("span", { class: "muted small" }, `Page ${pageIx + 1} of ${tiers.length}`), el("button", { class: "btn sm ghost", disabled: pageIx === tiers.length - 1, onclick: () => { pageIx++; draw(); } }, "Next →"))));
+      const section = (tier) => { const pool = BOOKMARKS.filter(b => b.tier === tier); const n = tier === "legend" ? pool.length : choicesFor(tier, goals); const have = pool.filter(b => owned.has(b.key)).length;
+        return el("div", { class: "bm-section" }, el("div", { class: "bm-sec-head" }, el("span", { class: "bm-page-title" }, TIER_NAMES[tier]), el("span", { class: "bm-sec-count" }, `${have} / ${pool.length}`)),
+          el("div", { class: "bm-sec-hint" }, tier === "easy" ? "Easy goals. Each easy or medium goal unlocks one more design to pick from." : tier === "medium" ? "Medium goals. Medium and difficult goals unlock more." : tier === "hard" ? "Difficult goals only. They glow." : "Never picked. Earned by patterns of goals over months."),
+          el("div", { class: "bm-slots" }, ...pool.map((b, i) => slot(b, i < n)))); };
+      fill(book, el("div", { class: "bm-page left" }, section("easy"), section("medium")), el("div", { class: "bm-page right" }, section("hard"), section("legend"),
+        el("div", { class: "bm-legend" }, el("span", { class: "lg has" }, "yours"), el("span", { class: "lg open" }, "?  next pick"), el("span", { class: "lg far" }, "🔒 unlock later"), el("span", { class: "muted small" }, " · click one you own to put it in a book"))));
     }
     function slot(b, unlocked) {
       const has = owned.has(b.key);
@@ -841,7 +846,7 @@
           el("div", { class: "category-head" }, el("h2", {}, cat.name), cat.custom ? el("span", { class: "custom-tag" }, "Yours") : null,
             el("span", { class: "count" + (books.length >= MAX_PER_CATEGORY ? " full" : "") }, books.length >= MAX_PER_CATEGORY ? "Full · 10 of 10" : `${books.length} of ${MAX_PER_CATEGORY}`),
             cat.custom ? el("button", { class: "icon-btn", title: "Remove category", onclick: () => { if (confirm(`Remove "${cat.name}" and its books?`)) { draft.categories.splice(ci, 1); markDirty(); drawShelf(); } } }, "✕") : null),
-          list, books.length < MAX_PER_CATEGORY ? addRowFor(books, (b) => { books.push({ ...b, excited: false }); markDirty(); drawShelf(); }, "Book or series title") : null);
+          list, books.length < MAX_PER_CATEGORY ? addRowFor(books, (b) => { books.push(inheritCover({ ...b, excited: false })); markDirty(); drawShelf(); }, "Book or series title") : null);
       }));
     }
     function drawRecs() {
@@ -1134,6 +1139,7 @@
     function drawStats() { const inYear = log.filter(x => (x.finished || "").startsWith(year)); const months = new Set(inYear.map(x => x.finished.slice(0, 7))).size;
       fill(stats, el("div", { class: "stat" }, el("b", {}, inYear.length), el("span", {}, "Read in " + year)), el("div", { class: "stat" }, el("b", {}, log.length), el("span", {}, "All time")), el("div", { class: "stat" }, el("b", {}, months ? (inYear.length / months).toFixed(1) : "0"), el("span", {}, "Per month"))); }
     function drawList() {
+      log.forEach(inheritCover);
       const rows = log.map((x, i) => ({ x, i })).filter(r => (r.x.finished || "").startsWith(year)).sort((a, b) => (b.x.finished || "").localeCompare(a.x.finished || ""));
       fill(listBox, rows.length ? el("ul", { class: "books" }, ...rows.map(({ x, i }) => el("li", { class: "book log-row" },
         el("span", { class: "log-date" }, x.finished ? new Date(x.finished + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—"),
@@ -1157,7 +1163,7 @@
     attachSuggest(t, (hit) => { t.value = hit.title; if (hit.author && !a.value) a.value = hit.author; setKind(hit.kind === "series" ? "series" : "book"); if (hit.cover) { pendingCover = hit.cover; pendingFile = null; picBtn.textContent = "📷 ✓"; picBtn.classList.add("has-pic"); } });
     const addBtn = el("button", { class: "btn sm primary", type: "submit" }, "Add to my books");
     const form = el("form", { class: "add-book log-add", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) return; let cover = pendingCover; if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 500); } catch (ex) { toast("Picture didn't upload: " + ex.message); } addBtn.disabled = false; addBtn.textContent = "Add to my books"; }
-      log.push({ id: uid(), title: t.value.trim(), author: a.value.trim(), kind, content: contentSel.value, finished: d.value || dayKey(), cover: cover || undefined });
+      log.push(inheritCover({ id: uid(), title: t.value.trim(), author: a.value.trim(), kind, content: contentSel.value, finished: d.value || dayKey(), cover: cover || undefined }));
       const y = (d.value || dayKey()).slice(0, 4); if (!years.includes(y)) { years.push(y); years.sort().reverse(); } year = y;
       t.value = ""; a.value = ""; pendingFile = pendingCover = null; picBtn.textContent = "📷"; picBtn.classList.remove("has-pic"); contentSel.value = ""; setKind("book");
       await save("Added. Nice one."); } },
@@ -1192,6 +1198,7 @@
     const tbrBox = el("div", { class: "card" });
     async function saveTbr(msg) { await saveProfile({ tbr: me.tbr }); if (msg) toast(msg); drawTbr(); }
     function drawTbr() {
+      tbr.forEach(inheritCover);
       const st = me.stats || (me.stats = {}); const today = dayKey();
       const reading = tbr.filter(x => x.reading), queue = tbr.filter(x => !x.reading);
       const t2 = el("input", { class: "input", placeholder: "A book you want to read next" }), a2 = el("input", { class: "input", placeholder: "Author (optional)" });
@@ -1212,7 +1219,7 @@
           el("button", { class: "btn sm" + (st.last_checkin === today ? " ghost" : " primary"), onclick: async () => { if (await checkInToday()) drawTbr(); } }, st.last_checkin === today ? `☀️ Read today · ${st.read_streak || 1} day streak` : "☀️ I read today")),
         el("p", { class: "muted small" }, "Check in on days you read to grow your pet and build a streak. Slide the bar to show how far you are. Friends see what you're reading only if you allow it on your profile."),
         (reading.length || queue.length) ? el("ul", { class: "books" }, ...reading.map(row), ...queue.map(row)) : el("div", { class: "empty-books" }, "Nothing lined up. Add the next book you want to read."),
-        el("form", { class: "add-book", style: "border-top:none;padding:10px 0 0", onsubmit: (e) => { e.preventDefault(); if (!t2.value.trim()) return; tbr.push({ id: uid(), title: t2.value.trim(), author: a2.value.trim(), kind: "book", progress: 0, reading: false, added: today }); saveTbr("Added to your list."); } }, w2, a2, el("button", { class: "btn sm", type: "submit" }, "Add to list")));
+        el("form", { class: "add-book", style: "border-top:none;padding:10px 0 0", onsubmit: (e) => { e.preventDefault(); if (!t2.value.trim()) return; tbr.push(inheritCover({ id: uid(), title: t2.value.trim(), author: a2.value.trim(), kind: "book", progress: 0, reading: false, added: today })); saveTbr("Added to your list."); } }, w2, a2, el("button", { class: "btn sm", type: "submit" }, "Add to list")));
     }
     drawTbr(); window.__redrawTbr = drawTbr;
     page.append(el("div", { class: "page-head" }, el("div", {}, el("div", { class: "eyebrow" }, "Reading record"), el("h1", {}, "My Books"), el("p", { class: "sub" }, "What you're reading, what's next, and every book you finish, kept by year. Tap 📝 on any book for quotes, notes, thoughts and journal entries. Each entry is private unless you make it public."))),
