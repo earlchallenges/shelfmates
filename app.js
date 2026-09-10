@@ -175,6 +175,20 @@
     }
   })();
   const bannerThemeOf = (b) => b.theme || "Classic";
+  // ---------- themes (whole-site looks; some need badges) ----------
+  const THEMES = [
+    { key: "system",   name: "Match my device", need: 0,  desc: "Light or dark, whatever your phone is set to.", sw: ["#F6F5F1", "#141816", "#2E6E4E"] },
+    { key: "light",    name: "Light",           need: 0,  desc: "Warm off-white paper.", sw: ["#F6F5F1", "#FFFFFF", "#1C2320"] },
+    { key: "dark",     name: "Dark",            need: 0,  desc: "Soft charcoal green.", sw: ["#141816", "#1D2321", "#EEF0EC"] },
+    { key: "sepia",    name: "Old Paper",       need: 0,  desc: "Like a book that's been loved a while.", sw: ["#F1E7D0", "#FAF4E6", "#3B2F1E"] },
+    { key: "midnight", name: "Midnight Ink",    need: 3,  desc: "Deep navy, reading-lamp glow.", sw: ["#0B1026", "#131A3A", "#E8ECFF"] },
+    { key: "forest",   name: "Deep Forest",     need: 5,  desc: "Dark greens, mossy and calm.", sw: ["#0F1F17", "#16291F", "#E9F2EC"] },
+    { key: "rose",     name: "Rose Quartz",     need: 8,  desc: "Blush pink, soft and bright.", sw: ["#FBEAF0", "#FFF6F9", "#3A1F2A"] },
+    { key: "tidepool", name: "Tidepool",        need: 12, desc: "Sea-glass blues and teals.", sw: ["#E6F3F6", "#F7FCFD", "#12303A"] },
+    { key: "ember",    name: "Ember",           need: 20, desc: "Dark and warm, like a fireside.", sw: ["#1A1210", "#241816", "#F7EBE4"] },
+    { key: "lavender", name: "Lavender Dusk",   need: 30, desc: "Pale purple evening light.", sw: ["#ECE8F6", "#F8F6FD", "#2B2442"] },
+    { key: "gilded",   name: "Gilded Night",    need: 50, desc: "Black and gold. For the serious collector.", sw: ["#141210", "#1D1A15", "#F1D17A"] },
+  ];
   const ACCENTS = [
     { key: "green", name: "Bookcloth green", hex: "#2E6E4E", need: 0 },
     { key: "rose",  name: "Rose",            hex: "#B3556A", need: 1 },
@@ -407,7 +421,11 @@
       setTimeout(() => { t.hidden = true; setTimeout(next, 250); }, 2400);
     })();
   }
-  function applyTheme() { document.documentElement.dataset.accent = me?.accent || "green"; }
+  function applyTheme() {
+    document.documentElement.dataset.accent = me?.accent || "green";
+    const t = (me && me.stats && me.stats.theme) || "system";
+    if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  }
   const bannerOf = (p) => BANNERS.find(b => b.key === (p.banner || "plain")) || BANNERS[0];
   const ownsBanner = (p, b) => b.need === 0 && b.cost === 0 || (b.need && badgeCount(p) >= b.need) || (stats(p).owned_banners || []).includes(b.key);
 
@@ -911,7 +929,7 @@
   async function pageBadges() {
     const m = metrics(me, friends.length); const n = badgeCount(me); const total = BADGES.length;
     const ach = BADGES.filter(b => !b.monthly); const earnedKeys = new Set((me.badges || []).map(b => b.key));
-    const nextUnlock = [...ACCENTS.map(a => ({ name: a.name + " accent", need: a.need })), ...BANNERS.filter(b => b.need).map(b => ({ name: b.name + " banner", need: b.need })), ...AVATAR_SETS.filter(a => a.need).map(a => ({ name: a.set + " avatars", need: a.need }))].filter(x => x.need > n).sort((a, b) => a.need - b.need)[0];
+    const nextUnlock = [...ACCENTS.map(a => ({ name: a.name + " accent", need: a.need })), ...BANNERS.filter(b => b.need).map(b => ({ name: b.name + " banner", need: b.need })), ...THEMES.filter(t => t.need).map(t => ({ name: t.name + " theme", need: t.need })), ...AVATAR_SETS.filter(a => a.need).map(a => ({ name: a.set + " avatars", need: a.need }))].filter(x => x.need > n).sort((a, b) => a.need - b.need)[0];
     const nextFrame = FRAMES.find(f => f.level > levelOf(me.xp || 0));
     const page = el("div", { class: "stack" });
     page.append(el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "Badges"), el("p", { class: "sub" }, `${n} of ${total} earned. ` + (nextUnlock ? `Next unlock at ${nextUnlock.need}: ${nextUnlock.name}.` : "You've unlocked everything.") + (nextFrame ? ` Next frame at level ${nextFrame.level}: ${nextFrame.name}.` : "")))));
@@ -1016,6 +1034,11 @@
     const name = el("input", { class: "input", value: me.display_name }), tag = el("input", { class: "input", value: me.tagline || "", placeholder: "One line about you as a reader", maxlength: 80 });
     let accent = me.accent || "green", avatar = me.avatar, banner = me.banner || "plain", frame = me.frame || "none";
     const showReading = el("input", { type: "checkbox", checked: me.show_reading !== false });
+    const themeGrid = el("div", { class: "theme-grid" });
+    const drawThemes = () => fill(themeGrid, ...THEMES.map(t => { const cur = (me.stats && me.stats.theme) || "system"; const ok = n >= t.need;
+      return el("button", { class: "theme-opt" + (t.key === cur ? " on" : "") + (ok ? "" : " locked"), title: t.desc + (ok ? "" : ` · unlocks at ${t.need} badges`), onclick: async () => { if (!ok) { toast(`${t.name} unlocks at ${t.need} badges. You have ${n}.`); return; } const st = stats(me); st.theme = t.key; applyTheme(); drawThemes(); try { await saveProfile({ stats: st }); toast(t.name + " it is."); } catch (e) { toast(e.message); } } },
+        el("div", { class: "theme-sw", style: `background:${t.sw[0]}` }, el("span", { style: `background:${t.sw[1]}` }, el("i", { style: `background:${t.sw[2]}` }))), el("div", { class: "bn-name" }, t.name), el("small", { class: "muted" }, ok ? (t.key === cur ? "Selected" : t.need ? "Unlocked" : "") : `${t.need} badges`)); }));
+    drawThemes();
     const page = el("div", { class: "stack" });
     const myLevel = levelOf(me.xp || 0);
     const frGrid = el("div", { class: "frame-grid" });
@@ -1085,6 +1108,7 @@
         el("div", { class: "field" }, el("label", { class: "row", style: "gap:8px;cursor:pointer" }, showReading, "Show friends what I'm reading now and how far I am"), el("div", { class: "hint" }, "Turn it off and only you see your progress.")),
         el("div", { class: "field" }, el("label", {}, "Name"), name),
         el("div", { class: "field" }, el("label", {}, "Tagline"), tag),
+        el("div", { class: "field" }, el("label", {}, "Theme"), el("div", { class: "hint" }, "The whole site's look. Some unlock with badges."), themeGrid),
         el("div", { class: "field" }, el("label", {}, "Accent color"), sw),
         el("div", { class: "field" }, el("label", {}, "Avatar (used when there's no picture)"), av),
         el("div", { class: "row" }, el("button", { class: "btn primary", onclick: async () => { try { await saveProfile({ display_name: name.value.trim() || me.username, tagline: tag.value.trim(), accent, avatar, banner, frame, show_reading: showReading.checked }); toast("Profile saved."); render(); } catch (e) { toast("Couldn't save: " + e.message); } } }, "Save profile"),
