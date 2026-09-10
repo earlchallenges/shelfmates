@@ -19,7 +19,21 @@
   ];
   const contentOf = (k) => CONTENT.find(c => c.key === (k || "")) || CONTENT[0];
   const contentPill = (k) => { const c = contentOf(k); return c.key ? el("span", { class: "content " + c.key, title: "Content: " + c.label }, c.short) : null; };
-  const contentSelect = (item, onChange) => el("select", { class: "content-sel", title: "Content rating", onchange: (e) => onChange(e.target.value) }, ...CONTENT.map(c => el("option", { value: c.key, selected: (item.content || "") === c.key }, c.key ? c.label : "Content?")));
+  const LEVELS = [["", "?"], ["none", "None"], ["mild", "Mild"], ["medium", "Medium"], ["high", "High"]];
+  const CONTENT_AXES = [["content", "Language", CONTENT.map(c => [c.key, c.key ? c.label : "?"])], ["spice", "Spice", LEVELS], ["violence", "Violence", LEVELS]];
+  // one compact button that opens three little toggles: language, spice, violence
+  function contentSelect(item, onChange) {
+    const has = item.content || item.spice || item.violence;
+    const btn = el("button", { class: "content-sel" + (has ? " set" : ""), type: "button", title: "Language, spice and violence" }, has ? "⚠︎ Content" : "Content?");
+    const pop = el("div", { class: "content-pop", hidden: true, onclick: (e) => e.stopPropagation() },
+      ...CONTENT_AXES.map(([field, label, opts]) => el("label", { class: "content-axis" }, el("span", {}, label), el("select", { onchange: (e) => { item[field] = e.target.value; onChange(field, e.target.value); btn.textContent = (item.content || item.spice || item.violence) ? "⚠︎ Content" : "Content?"; btn.classList.toggle("set", !!(item.content || item.spice || item.violence)); } }, ...opts.map(([v, l]) => el("option", { value: v, selected: (item[field] || "") === v }, l))))),
+      el("div", { class: "muted small", style: "padding:4px 2px 0" }, "Helps friends decide. Only shown when set."));
+    btn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); document.querySelectorAll(".content-pop").forEach(x => { if (x !== pop) x.hidden = true; }); pop.hidden = !pop.hidden; });
+    return el("span", { class: "content-wrap" }, btn, pop);
+  }
+  document.addEventListener("click", () => document.querySelectorAll(".content-pop").forEach(x => x.hidden = true));
+  const levelPill = (field, label, v) => v && v !== "none" ? el("span", { class: "content " + (v === "high" ? "heavy" : v === "medium" ? "mild" : "clean"), title: label + ": " + v }, label + ": " + v) : (v === "none" ? el("span", { class: "content clean", title: label + ": none" }, "No " + label.toLowerCase()) : null);
+  const contentPills = (item) => [contentPill(item.content), levelPill("spice", "Spice", item.spice), levelPill("violence", "Violence", item.violence)];
   const NOTE_KINDS = [["quote", "Quote"], ["note", "Note"], ["thought", "Thought"], ["journal", "Journal entry"]];
   const HELP_EMAIL = "joseph4freedom@gmail.com";
 
@@ -33,6 +47,12 @@
     recRead: { coins: 15, xp: 30,  label: "read a recommendation" },
     visit:   { coins: 2,  xp: 5,   label: "daily visit" },
     cover:   { coins: 3,  xp: 5,   label: "cover added" },
+    checkin: { coins: 8,  xp: 20,  label: "read today" },
+    progress:{ coins: 2,  xp: 5,   label: "progress update" },
+    finish:  { coins: 20, xp: 40,  label: "finished a book" },
+    goalEasy:{ coins: 15, xp: 30,  label: "easy goal" },
+    goalMed: { coins: 40, xp: 80,  label: "medium goal" },
+    goalHard:{ coins: 100, xp: 200, label: "hard goal" },
   };
   const levelOf = (xp) => Math.min(99, Math.floor(Math.sqrt(Math.max(0, xp) / 100)) + 1);
   const xpForLevel = (l) => 100 * (l - 1) * (l - 1);
@@ -47,7 +67,9 @@
     { key: "fox",    name: "Fox",      stages: ["🥚","🦊","🦊","🦊"], cost: 100 },
     { key: "turtle", name: "Turtle",   stages: ["🥚","🐢","🐢","🐢"], cost: 100 },
     { key: "worm",   name: "Bookworm", stages: ["🥚","🐛","🦋","🦋"], cost: 0 },
+    { key: "phoenix", name: "Phoenix", stages: ["🥚","🐣","🦅","🐦‍🔥"], cost: 0, needBooks: 100 },
   ];
+  const booksRead = (p) => (p.reading_log || []).length;
   const PET_FEED_COST = 10, PET_FEED_XP = 25;
   const petLevelOf = (xp) => Math.min(50, Math.floor(Math.sqrt(Math.max(0, xp) / 30)) + 1);
   const petXpFor = (l) => 30 * (l - 1) * (l - 1);
@@ -189,6 +211,18 @@
   tierBadges("visits", "📅", ["Regular","Weekly Reader","Monthly Regular","Hundred Days","Year Round"], [3,7,30,100,365], "visits", n => `Open Shelfmates on ${n} different days.`);
   tierBadges("vstreak", "🌅", ["Three in a Row","Week Streak","Fortnight","Month Straight"], [3,7,14,30], "visitStreak", n => `Visit ${n} days in a row.`);
   tierBadges("fresh", "🗓️", ["Fresh Shelf","Early Bird","On Time","Clockwork"], [1,3,6,12], "freshMonths", n => `Save your shelf in the first week of ${n} month${n>1?"s":""}.`);
+  tierBadges("finished", "📕", ["Finished One","Five Down","Ten Finished","Twenty-Five","Half a Hundred","Hundred Club","Two Hundred","Five Hundred","A Thousand"], [1,5,10,25,50,100,200,500,1000], "finished", n => `Log ${n} finished book${n>1?"s":""} in My Books.`);
+  tierBadges("notes", "✍️", ["First Note","Note Taker","Scribbler","Commonplace Book","Marginalia Master"], [1,5,25,100,250], "notes", n => `Write ${n} quote${n>1?"s":""}, note${n>1?"s":""} or journal entr${n>1?"ies":"y"}.`);
+  tierBadges("quotes", "❝", ["Quotable","Collector of Lines","Anthology"], [1,10,50], "quotes", n => `Save ${n} quote${n>1?"s":""}.`);
+  tierBadges("goals", "🎯", ["Goal Setter","Follow Through","Habit Builder","Unstoppable"], [1,5,15,40], "goalsDone", n => `Finish ${n} goal${n>1?"s":""} you set for yourself.`);
+  tierBadges("hard", "🧗", ["Hard Mode","Mountain Climber"], [1,5], "hardGoals", n => `Finish ${n} goal${n>1?"s":""} you marked difficult.`);
+  tierBadges("tbr", "🔖", ["Next Up","Stacked","Tower of Books"], [1,5,15], "tbr", n => `Keep ${n} book${n>1?"s":""} on your To Be Read list.`);
+  tierBadges("checkin", "☀️", ["Read Today","Reading Week","Thirty Days","Hundred Days of Reading","A Year of Pages"], [1,7,30,100,365], "checkins", n => `Check in "I read today" on ${n} day${n>1?"s":""}.`);
+  tierBadges("rstreak", "🔥", ["Three Days Straight","Seven Straight","Thirty Straight"], [3,7,30], "readStreak", n => `Read ${n} days in a row.`);
+  tierBadges("decor", "🛋️", ["Home Sweet Home","Interior Designer","Cozy Corner"], [1,10,25], "decor", n => `Place ${n} decoration${n>1?"s":""} in your room.`);
+  BADGES.push({ key: "dressed", name: "Dressed Up", icon: "🎩", metric: "outfit", need: 1, how: "Put an outfit piece on your pet." });
+  BADGES.push({ key: "collar", name: "Badge of Honor", icon: "📿", metric: "collar", need: 1, how: "Wear one of your badges as your pet's collar." });
+  BADGES.push({ key: "phoenix_owner", name: "Rise Again", icon: "🐦‍🔥", metric: "phoenix", need: 1, how: "Adopt the Phoenix after reading 100 books." });
   BADGES.push({ key: "photo", name: "Say Cheese", icon: "📷", metric: "photo", need: 1, how: "Add a profile picture." });
   BADGES.push({ key: "banner", name: "New Look", icon: "🎏", metric: "banner", need: 1, how: "Change your banner." });
   BADGES.push({ key: "adopted", name: "Adopted", icon: "🐣", metric: "pet", need: 1, how: "Adopt a pet." });
@@ -200,6 +234,43 @@
     BADGES.push({ key: `month_${mk}`, name: `${MONTH_NAMES[m - 1]} ${y}`, icon: MONTH_ICONS[m - 1], metric: "month", month: mk, need: 1, how: `Save your shelf during ${MONTH_NAMES[m - 1]} ${y}.`, monthly: true });
   }
   const BADGE_BY_KEY = Object.fromEntries(BADGES.map(b => [b.key, b]));
+
+  // ---------- room: decorations, outfits, pet voices ----------
+  const ROOM_W = 8, ROOM_H = 5;
+  const DECOR = [
+    // key, emoji, name, rarity (1 common, 2 uncommon, 3 rare)
+    ["shelf", "📚", "Bookshelf", 1], ["lamp", "🪔", "Reading lamp", 1], ["plant", "🪴", "Potted plant", 1], ["chair", "🪑", "Reading chair", 1], ["rug", "🧶", "Yarn rug", 1], ["mug", "☕", "Coffee mug", 1], ["candle", "🕯️", "Candle", 1], ["clock", "🕰️", "Mantel clock", 1], ["frame", "🖼️", "Picture frame", 1], ["stack", "📖", "Book stack", 1], ["window", "🪟", "Window", 1], ["door", "🚪", "Door", 1], ["basket", "🧺", "Blanket basket", 1], ["teapot", "🫖", "Teapot", 1], ["radio", "📻", "Old radio", 1],
+    ["fireplace", "🔥", "Fireplace", 2], ["couch", "🛋️", "Couch", 2], ["globe", "🌍", "Globe", 2], ["telescope", "🔭", "Telescope", 2], ["piano", "🎹", "Piano", 2], ["guitar", "🎸", "Guitar", 2], ["cactus", "🌵", "Cactus", 2], ["bonsai", "🎋", "Bamboo", 2], ["aquarium", "🐠", "Aquarium", 2], ["typewriter", "⌨️", "Typewriter", 2], ["map", "🗺️", "Wall map", 2], ["hourglass", "⏳", "Hourglass", 2], ["bed", "🛏️", "Bed", 2], ["mirror", "🪞", "Mirror", 2], ["chest", "🧰", "Treasure chest", 2],
+    ["crystal", "🔮", "Crystal ball", 3], ["trophy", "🏆", "Trophy", 3], ["dragonstatue", "🐉", "Dragon statue", 3], ["chandelier", "💎", "Chandelier", 3], ["scroll", "📜", "Ancient scroll", 3], ["castle", "🏰", "Castle model", 3], ["rocket", "🚀", "Rocket", 3], ["moon", "🌙", "Moon lamp", 3], ["sword", "⚔️", "Wall sword", 3], ["harp", "🪗", "Accordion", 3], ["fountain", "⛲", "Fountain", 3], ["tree", "🎄", "Little tree", 3],
+  ];
+  const DECOR_BY = Object.fromEntries(DECOR.map(d => [d[0], { key: d[0], emoji: d[1], name: d[2], rarity: d[3] }]));
+  const OUTFITS = [
+    // key, emoji, name, slot, how to get (null = free)
+    ["bow", "🎀", "Bow", "neck", null], ["glasses", "👓", "Reading glasses", "eyes", null], ["scarf", "🧣", "Scarf", "neck", null],
+    ["tophat", "🎩", "Top hat", "head", "goal"], ["cap", "🧢", "Ball cap", "head", "goal"], ["gradcap", "🎓", "Grad cap", "head", "goal"], ["shades", "🕶️", "Sunglasses", "eyes", "goal"], ["crown", "👑", "Crown", "head", "goal"], ["flower", "🌸", "Flower", "head", "goal"], ["tie", "👔", "Little tie", "neck", "goal"], ["wizard", "🧙", "Wizard hat", "head", "goal"], ["halo", "😇", "Halo", "head", "goal"],
+  ];
+  const OUTFIT_BY = Object.fromEntries(OUTFITS.map(o => [o[0], { key: o[0], emoji: o[1], name: o[2], slot: o[3], how: o[4] }]));
+  const GOAL_LEVELS = { easy: { name: "Easy", reward: "goalEasy", drops: [1] }, medium: { name: "Medium", reward: "goalMed", drops: [1, 2] }, hard: { name: "Difficult", reward: "goalHard", drops: [2, 3, "outfit"] } };
+  const PET_VOICE = {
+    owl:     { hi: ["Hoo's there? Oh, it's you. Good.", "I was just re-reading the shelf. Twice.", "Evening or morning, it's always reading time."], goal: "A wise reader sets a small goal. Shall we?", book: (t) => `Hoo. "${t}". I have opinions about that one. Mostly good.`, idle: "I'll be up here, watching the shelf.", fed: "Mmm. Knowledge is delicious.", grow: "I feel wiser already." },
+    cat:     { hi: ["Oh. You're back. I suppose that's fine.", "I sat on your book. You're welcome.", "Feed me and I'll pretend to listen."], goal: "Set a goal. Not for me. For you.", book: (t) => `"${t}"? I knocked it off the table once. Twice.`, idle: "*stretches* Don't mind me.", fed: "Acceptable.", grow: "I've grown. Admire me." },
+    dragon:  { hi: ["THE READER RETURNS. Excellent.", "My hoard grows with every book you finish.", "I burned nothing today. Yet."], goal: "A dragon without a quest is just a lizard. Set one!", book: (t) => `"${t}"! Does it have dragons? It should have dragons.`, idle: "*curls around the bookshelf*", fed: "MORE. But also thank you.", grow: "My wings! Look at my wings!" },
+    fox:     { hi: ["Psst. Read anything sneaky lately?", "I found a shortcut to the good chapters.", "Clever readers finish what they start."], goal: "Bet you can't finish a goal this week. Prove me wrong.", book: (t) => `"${t}", hm? I'd have skipped to the ending. Don't tell.`, idle: "*tail flick*", fed: "Ooh, snacks. You're my favorite.", grow: "Sleeker. Faster. Still cute." },
+    turtle:  { hi: ["Slow and steady. Hello.", "I've been reading the same page all day. It's a good page.", "No rush. Sit with me."], goal: "One small goal. Then another. That's how mountains move.", book: (t) => `"${t}". Take your time with it. I am.`, idle: "*blinks slowly*", fed: "Thank... you.", grow: "I grew. It took a while." },
+    worm:    { hi: ["Nom nom. I mean, hello!", "I live in chapter three now.", "Books taste better when you read them first."], goal: "Let's set a goal! A crunchy one.", book: (t) => `"${t}" is delicious. The paper, I mean. And the story.`, idle: "*munches quietly*", fed: "Yum!", grow: "I'm turning into something. Something with wings!" },
+    phoenix: { hi: ["A hundred books. You earned me.", "Every book you finish, I burn a little brighter.", "Rise and read."], goal: "Legends set goals. Set yours.", book: (t) => `"${t}" glows on your shelf. Finish it and I'll rise.`, idle: "*embers drift up*", fed: "The fire grows.", grow: "I am reborn!" },
+  };
+  const petVoice = (pet) => PET_VOICE[pet?.type] || PET_VOICE.owl;
+  const roomOf = (p) => { const r = p.room || (p.room = {}); r.items = r.items || []; r.owned = r.owned || {}; r.outfit = r.outfit || []; r.visible = r.visible !== false; return r; };
+  function grantDecor(rarity) {
+    const pool = DECOR.filter(d => d[3] === rarity); const pick = pool[Math.floor(Math.random() * pool.length)];
+    const r = roomOf(me); r.owned[pick[0]] = (r.owned[pick[0]] || 0) + 1; return DECOR_BY[pick[0]];
+  }
+  function grantOutfit() {
+    const r = roomOf(me); const locked = OUTFITS.filter(o => o[4] === "goal" && !(r.owned["outfit:" + o[0]]));
+    if (!locked.length) return grantDecor(3);
+    const pick = locked[Math.floor(Math.random() * locked.length)]; r.owned["outfit:" + pick[0]] = 1; return OUTFIT_BY[pick[0]];
+  }
 
   // ---------- state & helpers ----------
   let sb = null, session = null, me = null, friends = [], pendingIn = [], pendingOut = [], notices = [];
@@ -266,6 +337,11 @@
       covers: allBooks(p).filter(b => b.cover).length, excited: allBooks(p).filter(b => b.excited).length,
       level: levelOf(p.xp || 0), petLevel: Math.max(0, ...((p.pets && p.pets.length ? p.pets : (p.pet ? [p.pet] : [])).map(x => petLevelOf(x.xp || 0)))), coinsEarned: p.coins_earned || 0,
       visits: st.visits || 0, visitStreak: st.visit_streak || 0, freshMonths: (st.fresh_months || []).length,
+      finished: booksRead(p), notes: st.notes_written || 0, quotes: st.quotes_written || 0,
+      goalsDone: (p.goals || []).filter(g => g.done).length, hardGoals: (p.goals || []).filter(g => g.done && g.level === "hard").length,
+      tbr: (p.tbr || []).length, checkins: st.checkins || 0, readStreak: st.read_streak_best || 0,
+      decor: ((p.room || {}).items || []).length, outfit: ((p.room || {}).outfit || []).length ? 1 : 0, collar: (p.room || {}).collar ? 1 : 0,
+      phoenix: (p.pets || []).some(x => x.type === "phoenix") ? 1 : 0,
       photo: p.photo_url ? 1 : 0, banner: p.banner && p.banner !== "plain" ? 1 : 0, pet: (p.pets && p.pets.length) || p.pet ? 1 : 0, tagline: p.tagline ? 1 : 0,
       months,
     };
@@ -315,7 +391,7 @@
   async function signOut() { await sb.auth.signOut(); session = null; me = null; location.hash = "#/"; render(); }
 
   // ---------- data ----------
-  const PROFILE_PUBLIC = "id,username,display_name,tagline,avatar,accent,photo_url,banner,frame,xp,pet,categories,recommendations,badges,reading_log,updated_at";
+  const PROFILE_PUBLIC = "id,username,display_name,tagline,avatar,accent,photo_url,banner,frame,xp,pet,categories,recommendations,badges,reading_log,tbr,room,show_reading,updated_at";
   async function loadMe() {
     const { data, error } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
     if (error) throw error;
@@ -399,6 +475,21 @@
     await sb.from("history").upsert({ user_id: me.id, month: mk, snapshot: { categories: draft.categories, recommendations: draft.recommendations } }, { onConflict: "user_id,month" });
     dirty = false; toast(targets.length ? "Shelf saved. Your friends will get a notice." : "Shelf saved.");
     if (titleIndex) loadTitles();
+  }
+
+  async function checkInToday() {
+    const st = stats(me); const today = dayKey();
+    if (st.last_checkin === today) { toast("Already checked in today. Nice."); return false; }
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    st.read_streak = st.last_checkin === dayKey(y) ? (st.read_streak || 0) + 1 : 1;
+    st.read_streak_best = Math.max(st.read_streak_best || 0, st.read_streak);
+    st.checkins = (st.checkins || 0) + 1; st.last_checkin = today;
+    award("checkin");
+    const ap = me.pet && myPets().find(x => x.id === me.pet.id); if (ap) { ap.xp = (ap.xp || 0) + 10; setActivePet(ap.id); }
+    let drop = null; if (st.read_streak % 7 === 0) { drop = grantDecor(2); } else if (Math.random() < 0.25) { drop = grantDecor(1); }
+    await saveProfile({ stats: st, pet: me.pet, pets: myPets(), room: me.room });
+    toast(`☀️ Read today · ${st.read_streak} day streak`); if (drop) toast(`${drop.emoji} ${drop.name} for your room!`, "badge-toast");
+    return true;
   }
 
   // daily visit + first-of-month reminder
@@ -526,10 +617,11 @@
   }
 
   // ---------- routing ----------
-  const routes = { "": pageAuth, "/": pageAuth, "/shelf": pageShelf, "/friends": pageFriends, "/badges": pageBadges, "/card": pageCard, "/profile": pageProfile, "/history": pageHistory, "/books": pageBooks, "/terms": pageTerms };
+  const routes = { "": pageAuth, "/": pageAuth, "/shelf": pageShelf, "/friends": pageFriends, "/badges": pageBadges, "/card": pageCard, "/profile": pageProfile, "/history": pageHistory, "/books": pageBooks, "/terms": pageTerms, "/room": pageRoom };
   function route() {
     const h = location.hash.replace(/^#/, "") || "/";
     if (h.startsWith("/u/")) return { fn: pageCard, arg: h.slice(3), key: h };
+    if (h.startsWith("/room/")) return { fn: pageRoom, arg: h.slice(6), key: "/room" };
     return { fn: routes[h] || pageShelf, key: h };
   }
   function updateTopbar() {
@@ -654,7 +746,7 @@
             el("span", { class: "rank" + (bi === 0 ? " top" : "") }, bi + 1),
             coverEl(b, true, (url) => { b.cover = url; markDirty(); drawShelf(); }),
             el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null),
-              el("div", { class: "author" }, kindPill(b, true, () => { b.kind = b.kind === "series" ? "book" : "series"; markDirty(); drawShelf(); }), contentSelect(b, (v) => { b.content = v; markDirty(); }), b.author ? " " + b.author : "")),
+              el("div", { class: "author" }, kindPill(b, true, () => { b.kind = b.kind === "series" ? "book" : "series"; markDirty(); drawShelf(); }), contentSelect(b, () => markDirty()), b.author ? " " + b.author : "")),
             el("div", { class: "tools" },
               el("button", { class: "icon-btn", title: "Quotes, notes and journal for this book", onclick: () => openNotes(b.title, b.author) }, "📝"),
               el("button", { class: "icon-btn star" + (b.excited ? " on" : ""), title: "Most excited about this one", onclick: () => { const was = b.excited; books.forEach(x => x.excited = false); b.excited = !was; markDirty(); drawShelf(); } }, "★"),
@@ -682,7 +774,7 @@
       fill(recs,
         el("div", { class: "eyebrow" }, "For other readers"), el("h2", {}, "My recommendations"),
         el("p", { class: "muted small" }, `Up to ${MAX_PER_CATEGORY}. Friends can mark one as read and you both earn coins.`), el("div", { class: "sep" }),
-        ...list.map((r, i) => el("div", { class: "rec" }, coverEl(r, true, (url) => { r.cover = url; markDirty(); drawRecs(); }), el("div", {}, el("div", { class: "title" }, r.title, r.author ? el("small", { class: "muted" }, " · " + r.author) : null), el("div", { class: "row", style: "gap:6px;margin-top:2px" }, kindPill(r, true, () => { r.kind = r.kind === "series" ? "book" : "series"; markDirty(); drawRecs(); }), contentSelect(r, (v) => { r.content = v; markDirty(); }), r.note ? el("span", { class: "note" }, r.note) : null)),
+        ...list.map((r, i) => el("div", { class: "rec" }, coverEl(r, true, (url) => { r.cover = url; markDirty(); drawRecs(); }), el("div", {}, el("div", { class: "title" }, r.title, r.author ? el("small", { class: "muted" }, " · " + r.author) : null), el("div", { class: "row", style: "gap:6px;margin-top:2px" }, kindPill(r, true, () => { r.kind = r.kind === "series" ? "book" : "series"; markDirty(); drawRecs(); }), contentSelect(r, () => markDirty()), r.note ? el("span", { class: "note" }, r.note) : null)),
           el("button", { class: "icon-btn", title: "Remove", onclick: () => { list.splice(i, 1); markDirty(); drawRecs(); } }, "✕"))),
         list.length < MAX_PER_CATEGORY ? el("form", { class: "add-book rec-add", onsubmit: async (e) => { e.preventDefault(); if (!t.value.trim()) return; let cover = pendingCover; if (pendingFile) { addBtn.disabled = true; addBtn.textContent = "Uploading…"; try { cover = await uploadImage(pendingFile, "cover", 500); } catch (ex) { toast("Picture didn't upload: " + ex.message); } } list.push({ id: uid(), title: t.value.trim(), author: a.value.trim(), note: n.value.trim(), kind, cover: cover || undefined }); markDirty(); drawRecs(); } }, twrap, a, n, el("div", { class: "row", style: "gap:6px" }, kindBtn, picBtn, addBtn)) : el("p", { class: "muted small" }, "That's 10. Remove one to add another."));
     }
@@ -723,7 +815,7 @@
       el("div", { class: "friend-top" }, avatarEl(p, "lg"), el("div", {}, el("div", { class: "name" }, p.display_name), el("div", { class: "handle" }, "@" + p.username + " · Lv " + levelOf(p.xp || 0) + (p.pet ? " · " + petEmoji(p.pet) + " Lv " + petLevelOf(p.pet.xp || 0) : "")),
         el("div", { class: "updated-ago" + (fresh ? " fresh" : "") }, badgeCount(p) + " badges · updated " + ago(p.updated_at)))),
       excited ? el("div", { class: "pick", style: "background:var(--rose-soft)" }, el("span", { class: "cat", style: "color:var(--rose)" }, "Most excited about"), el("span", { class: "t" }, excited.title), excited.author ? el("span", { class: "a" }, excited.author) : null) : null,
-      ...tops.map(t => el("div", { class: "pick" }, el("span", { class: "cat" }, "#1 " + t.cat + (t.kind === "series" ? " · series" : "")), el("span", { class: "t" }, t.title, contentPill(t.content)), t.author ? el("span", { class: "a" }, t.author) : null)),
+      ...tops.map(t => el("div", { class: "pick" }, el("span", { class: "cat" }, "#1 " + t.cat + (t.kind === "series" ? " · series" : "")), el("span", { class: "t" }, t.title, ...contentPills(t)), t.author ? el("span", { class: "a" }, t.author) : null)),
       !tops.length ? el("p", { class: "muted small" }, "Hasn't added books yet.") : null,
       el("span", { class: "more" }, "See full card →"));
   }
@@ -782,11 +874,15 @@
     if (mine || isFriend) {
       page.append(el("div", { class: "eyebrow", style: "margin-top:10px" }, mine ? "Everything on my shelf" : "Everything on their shelf"));
       page.append(...cats.map(c => el("section", { class: "category" }, el("div", { class: "category-head" }, el("h2", {}, c.name), el("span", { class: "count" }, c.books.length + " of 10")),
-        el("ul", { class: "books" }, ...c.books.map((b, i) => el("li", { class: "book" }, el("span", { class: "rank" + (i === 0 ? " top" : "") }, i + 1), coverEl(b, false), el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null), el("div", { class: "author" }, kindPill(b, false), contentPill(b.content), b.author ? " " + b.author : "")), el("span")))))));
+        el("ul", { class: "books" }, ...c.books.map((b, i) => el("li", { class: "book" }, el("span", { class: "rank" + (i === 0 ? " top" : "") }, i + 1), coverEl(b, false), el("div", { class: "bmeta" }, el("div", { class: "title" }, b.title, b.excited ? el("span", { class: "excited" }, "Most excited") : null), el("div", { class: "author" }, kindPill(b, false), ...contentPills(b), b.author ? " " + b.author : "")), el("span")))))));
       // reading log + public notes
       const log = p.reading_log || []; const yr = new Date().getFullYear(); const thisYear = log.filter(x => (x.finished || "").startsWith(String(yr)));
+      const nowReading = (p.tbr || []).filter(x => x.reading);
+      if (nowReading.length && (mine || p.show_reading !== false)) page.append(el("div", { class: "card" }, el("div", { class: "eyebrow" }, mine ? "Reading now" : p.display_name + " is reading"),
+        ...nowReading.map(x => el("div", { class: "row", style: "margin-top:8px;gap:12px" }, coverEl(x, false), el("div", { style: "flex:1;min-width:160px" }, el("div", { class: "title", style: "font-family:var(--display);font-weight:600" }, x.title, x.author ? el("small", { class: "muted" }, " · " + x.author) : null), el("div", { class: "progress", style: "margin-top:6px" }, el("i", { style: `width:${x.progress || 0}%` })), el("div", { class: "muted small" }, (x.progress || 0) + "% through"))))));
+      if ((mine || (p.room && p.room.visible !== false)) && ((p.room && (p.room.items || []).length) || mine)) page.append(el("a", { class: "btn", href: "#/room" + (mine ? "" : "/" + p.username), style: "align-self:flex-start" }, mine ? "🏠 My room" : "🏠 Visit " + p.display_name + "'s room"));
       if (log.length) page.append(el("div", { class: "card" }, el("div", { class: "eyebrow" }, mine ? "My books" : p.display_name + "'s books"), el("h2", {}, `${thisYear.length} read in ${yr}`, el("small", { class: "muted" }, ` · ${log.length} all time`)),
-        el("div", { class: "log-mini" }, ...thisYear.slice(0, 12).map(x => el("span", { class: "log-chip" }, x.title, contentPill(x.content))), thisYear.length > 12 ? el("span", { class: "muted small" }, `+${thisYear.length - 12} more`) : null)));
+        el("div", { class: "log-mini" }, ...thisYear.slice(0, 12).map(x => el("span", { class: "log-chip" }, x.title, ...contentPills(x))), thisYear.length > 12 ? el("span", { class: "muted small" }, `+${thisYear.length - 12} more`) : null)));
       const { data: pub } = await sb.from("notes").select("id,book_title,book_author,kind,body,public,created_at").eq("user_id", p.id).eq("public", true).order("created_at", { ascending: false }).limit(50);
       if (pub && pub.length) page.append(el("div", { class: "card" }, el("div", { class: "eyebrow" }, mine ? "My public quotes & notes" : p.display_name + "'s quotes & notes"), el("div", { class: "sep" }),
         ...pub.map(n => el("div", { class: "note-row" }, el("div", { class: "note-kind" }, NOTE_KINDS.find(k => k[0] === n.kind)?.[1] || "Note"), el("div", { class: "note-body" + (n.kind === "quote" ? " quote" : "") }, n.body), el("div", { class: "note-meta" }, n.book_title + (n.book_author ? " · " + n.book_author : "") + " · " + new Date(n.created_at).toLocaleDateString())))));
@@ -832,6 +928,7 @@
     const n = badgeCount(me);
     const name = el("input", { class: "input", value: me.display_name }), tag = el("input", { class: "input", value: me.tagline || "", placeholder: "One line about you as a reader", maxlength: 80 });
     let accent = me.accent || "green", avatar = me.avatar, banner = me.banner || "plain", frame = me.frame || "none";
+    const showReading = el("input", { type: "checkbox", checked: me.show_reading !== false });
     const page = el("div", { class: "stack" });
     const myLevel = levelOf(me.xp || 0);
     const frGrid = el("div", { class: "frame-grid" });
@@ -870,7 +967,7 @@
         pets.length ? el("p", { class: "muted small" }, "You can keep as many as you like, but only one goes on your profile. It grows every time you save your shelf, and any pet grows when you feed it coins.") : el("p", { class: "muted small" }, "Your pet grows every time you save your shelf, and faster when you feed it coins. The first one is free."),
         ...pets.map(petRow),
         el("div", { class: "eyebrow", style: "margin-top:14px" }, pets.length ? "Adopt another" : "Choose one"),
-        el("div", { class: "pet-choices" }, ...PETS.map(pt => { const cost = firstFree ? 0 : Math.max(100, pt.cost); return el("button", { class: "pet-choice", onclick: async () => { const nm = prompt(`Name your ${pt.name.toLowerCase()}:`, pt.name); if (nm == null) return; if (cost && (me.coins || 0) < cost) { toast(`Needs ${cost} coins. You have ${me.coins || 0}.`); return; } me.coins = (me.coins || 0) - cost; const np = { id: uid(), type: pt.key, name: nm.trim().slice(0, 20) || pt.name, xp: 0 }; myPets().push(np); if (!me.pet) setActivePet(np.id); try { await savePets(); } catch (e) { toast(e.message); } } }, el("span", { class: "pe" }, pt.stages[2]), el("b", {}, pt.name), el("small", {}, cost ? cost + " coins" : "Free")); })));
+        el("div", { class: "pet-choices" }, ...PETS.map(pt => { const cost = firstFree ? 0 : Math.max(100, pt.cost); const locked = pt.needBooks && booksRead(me) < pt.needBooks; return el("button", { class: "pet-choice" + (locked ? " locked" : ""), title: locked ? `Unlocks after ${pt.needBooks} books in My Books (${booksRead(me)} so far)` : "", onclick: async () => { if (locked) { toast(`The ${pt.name} hatches after ${pt.needBooks} finished books. You're at ${booksRead(me)}.`); return; } const nm = prompt(`Name your ${pt.name.toLowerCase()}:`, pt.name); if (nm == null) return; if (cost && (me.coins || 0) < cost) { toast(`Needs ${cost} coins. You have ${me.coins || 0}.`); return; } me.coins = (me.coins || 0) - cost; const np = { id: uid(), type: pt.key, name: nm.trim().slice(0, 20) || pt.name, xp: 0 }; myPets().push(np); if (!me.pet) setActivePet(np.id); try { await savePets(); } catch (e) { toast(e.message); } } }, el("span", { class: "pe" }, locked ? "🔒" : pt.stages[2]), el("b", {}, pt.name), el("small", {}, locked ? `${pt.needBooks} books` : (pt.needBooks ? "Earned!" : cost ? cost + " coins" : "Free"))); })));
     }
     drawPet();
     if (petIsLegend(me.pet)) petParade(me.pet);
@@ -898,11 +995,12 @@
         el("div", { class: "field" }, el("label", {}, "Profile picture"), photoRow, el("div", { class: "hint" }, "Your picture stays yours. Badges and coins change the banner behind it, not the picture.")),
         el("div", { class: "field" }, el("label", {}, "Frame"), el("div", { class: "hint" }, "A ring around your picture. Earned by level. " + FRAMES.filter(f => f.level > myLevel).length + " still to earn."), frGrid),
         el("div", { class: "field" }, el("label", {}, "Banner"), el("div", { class: "row" }, themeSel, el("span", { class: "hint" }, `${BANNERS.length} banners · ${BANNERS.filter(b => ownsBanner(me, b)).length} yours · scroll sideways`)), bnGrid),
+        el("div", { class: "field" }, el("label", { class: "row", style: "gap:8px;cursor:pointer" }, showReading, "Show friends what I'm reading now and how far I am"), el("div", { class: "hint" }, "Your room has its own switch on the room page.")),
         el("div", { class: "field" }, el("label", {}, "Name"), name),
         el("div", { class: "field" }, el("label", {}, "Tagline"), tag),
         el("div", { class: "field" }, el("label", {}, "Accent color"), sw),
         el("div", { class: "field" }, el("label", {}, "Avatar (used when there's no picture)"), av),
-        el("div", { class: "row" }, el("button", { class: "btn primary", onclick: async () => { try { await saveProfile({ display_name: name.value.trim() || me.username, tagline: tag.value.trim(), accent, avatar, banner, frame }); toast("Profile saved."); render(); } catch (e) { toast("Couldn't save: " + e.message); } } }, "Save profile"),
+        el("div", { class: "row" }, el("button", { class: "btn primary", onclick: async () => { try { await saveProfile({ display_name: name.value.trim() || me.username, tagline: tag.value.trim(), accent, avatar, banner, frame, show_reading: showReading.checked }); toast("Profile saved."); render(); } catch (e) { toast("Couldn't save: " + e.message); } } }, "Save profile"),
           el("a", { class: "btn ghost", href: "#/history" }, "My history"), el("button", { class: "btn ghost danger", style: "margin-left:auto", onclick: signOut }, "Log out"))),
       el("p", { class: "hint" }, "Username: @" + me.username + ". Usernames can't be changed."));
     return page;
@@ -934,7 +1032,7 @@
     }
     fill(overlay, el("div", { class: "crop-panel notes-panel" },
       el("div", { class: "row", style: "justify-content:space-between" }, el("div", {}, el("div", { class: "eyebrow" }, "Quotes, notes & journal"), el("h2", {}, title), author ? el("div", { class: "muted small" }, author) : null), el("button", { class: "icon-btn", onclick: () => overlay.remove() }, "✕")),
-      el("form", { class: "stack", style: "gap:8px;margin:12px 0", onsubmit: async (e) => { e.preventDefault(); if (!body.value.trim()) return; const { error } = await sb.from("notes").insert({ user_id: me.id, book_title: title, book_author: author || "", kind: kindSel.value, body: body.value.trim(), public: pub.checked }); if (error) { toast(error.message); return; } body.value = ""; pub.checked = false; load(); toast("Saved."); } },
+      el("form", { class: "stack", style: "gap:8px;margin:12px 0", onsubmit: async (e) => { e.preventDefault(); if (!body.value.trim()) return; const { error } = await sb.from("notes").insert({ user_id: me.id, book_title: title, book_author: author || "", kind: kindSel.value, body: body.value.trim(), public: pub.checked }); if (error) { toast(error.message); return; } const st = stats(me); st.notes_written = (st.notes_written || 0) + 1; if (kindSel.value === "quote") st.quotes_written = (st.quotes_written || 0) + 1; body.value = ""; pub.checked = false; load(); toast("Saved."); saveProfile({ stats: st }).catch(() => {}); } },
         el("div", { class: "row" }, kindSel, el("label", { class: "row", style: "gap:6px;margin-left:auto" }, pub, "Friends can see this")), body, el("div", { class: "row", style: "justify-content:flex-end" }, el("button", { class: "btn primary sm", type: "submit" }, "Add"))),
       el("div", { class: "sep" }), list));
     document.body.append(overlay); load();
@@ -958,7 +1056,7 @@
       fill(listBox, rows.length ? el("ul", { class: "books" }, ...rows.map(({ x, i }) => el("li", { class: "book log-row" },
         el("span", { class: "log-date" }, x.finished ? new Date(x.finished + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—"),
         coverEl(x, true, (url) => { x.cover = url; save(); }),
-        el("div", { class: "bmeta" }, el("div", { class: "title" }, x.title), el("div", { class: "author" }, kindPill(x, true, () => { x.kind = x.kind === "series" ? "book" : "series"; save(); }), contentSelect(x, (v) => { x.content = v; save(); }), x.author ? " " + x.author : "")),
+        el("div", { class: "bmeta" }, el("div", { class: "title" }, x.title), el("div", { class: "author" }, kindPill(x, true, () => { x.kind = x.kind === "series" ? "book" : "series"; save(); }), contentSelect(x, () => save()), x.author ? " " + x.author : "")),
         el("div", { class: "tools" },
           el("button", { class: "icon-btn", title: "Quotes, notes and journal", onclick: () => openNotes(x.title, x.author) }, "📝"),
           el("button", { class: "icon-btn", title: "Change date finished", onclick: () => { const d = prompt("Date finished (YYYY-MM-DD):", x.finished || dayKey()); if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) { x.finished = d; save(); } } }, "📅"),
@@ -982,8 +1080,147 @@
       t.value = ""; a.value = ""; pendingFile = pendingCover = null; picBtn.textContent = "📷"; picBtn.classList.remove("has-pic"); contentSel.value = ""; setKind("book");
       await save("Added. Nice one."); } },
       twrap, a, el("div", { class: "row", style: "gap:6px;flex-wrap:wrap" }, d, kindBtn, contentSel, picBtn, addBtn));
-    page.append(el("div", { class: "page-head" }, el("div", {}, el("div", { class: "eyebrow" }, "Reading record"), el("h1", {}, "My Books"), el("p", { class: "sub" }, "Every book you finish, kept by year. Tap 📝 on any book for quotes, notes, thoughts and journal entries. Each entry is private unless you make it public."))),
-      stats, tabs, listBox, el("div", { class: "card" }, el("div", { class: "eyebrow" }, "Finished a book?"), el("div", { style: "height:8px" }), form));
+    // ----- To Be Read + reading now -----
+    const tbr = me.tbr || (me.tbr = []);
+    const tbrBox = el("div", { class: "card" });
+    async function saveTbr(msg) { await saveProfile({ tbr: me.tbr }); if (msg) toast(msg); drawTbr(); }
+    function drawTbr() {
+      const st = me.stats || (me.stats = {}); const today = dayKey();
+      const reading = tbr.filter(x => x.reading), queue = tbr.filter(x => !x.reading);
+      const t2 = el("input", { class: "input", placeholder: "A book you want to read next" }), a2 = el("input", { class: "input", placeholder: "Author (optional)" });
+      const w2 = el("div", { class: "suggest-wrap" }, t2); attachSuggest(t2, (hit) => { t2.value = hit.title; if (hit.author && !a2.value) a2.value = hit.author; });
+      const row = (x) => el("li", { class: "book log-row tbr-row" + (x.reading ? " reading" : "") },
+        el("span", { class: "log-date" }, x.reading ? "NOW" : "NEXT"),
+        coverEl(x, true, (url) => { x.cover = url; saveTbr(); }),
+        el("div", { class: "bmeta" }, el("div", { class: "title" }, x.title), el("div", { class: "author" }, x.author || ""),
+          x.reading ? el("div", { class: "prog-row" }, el("input", { type: "range", min: 0, max: 100, step: 5, value: x.progress || 0, class: "prog", onchange: async (e) => { x.progress = +e.target.value; if (st.last_progress_day !== today) { st.last_progress_day = today; award("progress"); } await saveProfile({ tbr: me.tbr, stats: st }); drawTbr(); } }), el("span", { class: "prog-pct" }, (x.progress || 0) + "%")) : null),
+        el("div", { class: "tools" },
+          x.reading ? el("button", { class: "btn sm primary", onclick: async () => { const i = tbr.indexOf(x); tbr.splice(i, 1); (me.reading_log = me.reading_log || []).push({ id: uid(), title: x.title, author: x.author || "", kind: x.kind || "book", content: x.content, spice: x.spice, violence: x.violence, finished: today, cover: x.cover }); award("finish"); const ap = me.pet && myPets().find(z => z.id === me.pet.id); if (ap) { ap.xp = (ap.xp || 0) + 15; setActivePet(ap.id); } await saveProfile({ tbr: me.tbr, reading_log: me.reading_log, pet: me.pet, pets: myPets() }); toast("Finished! Added to " + today.slice(0, 4) + "."); drawAll(); drawTbr(); if (titleIndex) loadTitles(); } }, "Finished it ✓") : el("button", { class: "btn sm", onclick: () => { x.reading = true; x.progress = x.progress || 0; saveTbr("Reading now. Slide the bar as you go."); } }, "Start reading"),
+          el("button", { class: "icon-btn", title: "Quotes, notes and journal", onclick: () => openNotes(x.title, x.author) }, "📝"),
+          el("button", { class: "icon-btn", title: "Remove", onclick: () => { tbr.splice(tbr.indexOf(x), 1); saveTbr("Removed."); } }, "✕")));
+      fill(tbrBox,
+        el("div", { class: "row", style: "justify-content:space-between;align-items:flex-start;gap:12px" },
+          el("div", {}, el("div", { class: "eyebrow" }, "Reading now & to be read"), el("h2", {}, reading.length ? `Reading ${reading.length} · ${queue.length} up next` : `${queue.length} up next`)),
+          el("button", { class: "btn sm" + (st.last_checkin === today ? " ghost" : " primary"), onclick: async () => { if (await checkInToday()) drawTbr(); } }, st.last_checkin === today ? `☀️ Read today · ${st.read_streak || 1} day streak` : "☀️ I read today")),
+        el("p", { class: "muted small" }, "Check in on days you read to grow your pet, build a streak, and find things for your room. Slide the bar to show how far you are. Friends see what you're reading only if you allow it on your profile."),
+        (reading.length || queue.length) ? el("ul", { class: "books" }, ...reading.map(row), ...queue.map(row)) : el("div", { class: "empty-books" }, "Nothing lined up. Add the next book you want to read."),
+        el("form", { class: "add-book", style: "border-top:none;padding:10px 0 0", onsubmit: (e) => { e.preventDefault(); if (!t2.value.trim()) return; tbr.push({ id: uid(), title: t2.value.trim(), author: a2.value.trim(), kind: "book", progress: 0, reading: false, added: today }); saveTbr("Added to your list."); } }, w2, a2, el("button", { class: "btn sm", type: "submit" }, "Add to list")));
+    }
+    drawTbr();
+    page.append(el("div", { class: "page-head" }, el("div", {}, el("div", { class: "eyebrow" }, "Reading record"), el("h1", {}, "My Books"), el("p", { class: "sub" }, "What you're reading, what's next, and every book you finish, kept by year. Tap 📝 on any book for quotes, notes, thoughts and journal entries. Each entry is private unless you make it public."))),
+      tbrBox, stats, tabs, listBox, el("div", { class: "card" }, el("div", { class: "eyebrow" }, "Finished a book you didn't list?"), el("div", { style: "height:8px" }), form));
+    drawAll(); return page;
+  }
+
+  // ---------- My Room: decorate, pet corner, outfits, badge collars, goals, pet chat ----------
+  function petSprite(p, room, size = "") {
+    const pet = p.pet; if (!pet) return el("div", { class: "pet-sprite " + size }, el("span", { class: "pet-body" }, "🛏️"));
+    const outfit = (room.outfit || []).map(k => OUTFIT_BY[k]).filter(Boolean);
+    const head = outfit.find(o => o.slot === "head"), eyes = outfit.find(o => o.slot === "eyes"), neck = outfit.find(o => o.slot === "neck");
+    const collar = room.collar && BADGE_BY_KEY[room.collar];
+    return el("div", { class: "pet-sprite " + size, title: pet.name },
+      head ? el("span", { class: "po head" }, head.emoji) : null,
+      eyes ? el("span", { class: "po eyes" }, eyes.emoji) : null,
+      el("span", { class: "pet-body" }, petEmoji(pet)),
+      neck ? el("span", { class: "po neck" }, neck.emoji) : null,
+      collar ? el("span", { class: "po collar", title: "Collar: " + collar.name }, collar.icon) : null,
+      el("span", { class: "pet-tag" }, pet.name));
+  }
+  async function pageRoom(username) {
+    let p = me, mine = true;
+    if (username && username !== me.username) {
+      const { data } = await sb.from("profiles").select(PROFILE_PUBLIC).eq("username", username).maybeSingle();
+      if (!data) return el("div", { class: "loading" }, "No room at @" + username + ".");
+      p = data; mine = false;
+      if (!p.room || p.room.visible === false) return el("div", { class: "stack" }, el("div", { class: "loading" }, p.display_name + " keeps their room private."), el("div", { style: "text-align:center" }, el("a", { class: "btn", href: "#/u/" + p.username }, "Back to their card")));
+    }
+    const room = roomOf(p); const page = el("div", { class: "stack" });
+    let selected = null; // item key picked from inventory, waiting for a tile
+    const grid = el("div", { class: "room-grid", style: `grid-template-columns:repeat(${ROOM_W},1fr)` });
+    const inv = el("div", { class: "inventory" }), petCorner = el("div", { class: "pet-corner card" }), goalsBox = el("div", { class: "card" }), chatBox = el("div", { class: "card chat" });
+    async function saveRoom() { await saveProfile({ room: me.room, pets: myPets(), pet: me.pet }); }
+    function drawGrid() {
+      fill(grid, ...Array.from({ length: ROOM_W * ROOM_H }, (_, i) => {
+        const x = i % ROOM_W, y = Math.floor(i / ROOM_W); const it = room.items.find(z => z.x === x && z.y === y); const d = it && DECOR_BY[it.key];
+        const isPetSpot = (room.petSpot ? room.petSpot.x === x && room.petSpot.y === y : x === ROOM_W - 2 && y === ROOM_H - 1);
+        const tile = el("div", { class: "tile" + (y === ROOM_H - 1 ? " floor" : "") + (it ? " has" : "") + (isPetSpot ? " petspot" : ""), title: d ? d.name + (mine ? " · click to pick up" : "") : (mine && selected ? "Place here" : "") },
+          d ? el("span", { class: "deco" }, d.emoji) : null, isPetSpot && p.pet ? petSprite(p, room, "sm") : null);
+        if (mine) tile.addEventListener("click", async () => {
+          if (isPetSpot && !selected) { toast("That's " + (p.pet ? p.pet.name + "'s" : "the pet's") + " spot. Pick a decoration first to move it."); return; }
+          if (it) { room.items.splice(room.items.indexOf(it), 1); room.owned[it.key] = (room.owned[it.key] || 0) + 1; selected = null; drawAll(); await saveRoom(); return; }
+          if (selected === "PET") { room.petSpot = { x, y }; selected = null; drawAll(); await saveRoom(); return; }
+          if (!selected) { toast("Pick something from your inventory first."); return; }
+          if ((room.owned[selected] || 0) < 1) { selected = null; drawAll(); return; }
+          room.owned[selected]--; room.items.push({ key: selected, x, y }); if ((room.owned[selected] || 0) < 1) selected = null; drawAll(); await saveRoom();
+        });
+        return tile;
+      }));
+    }
+    function drawInv() {
+      if (!mine) { inv.hidden = true; return; }
+      const owned = Object.entries(room.owned).filter(([k, n]) => n > 0 && !k.startsWith("outfit:"));
+      fill(inv, el("div", { class: "eyebrow" }, "Inventory · pick one, then click a tile"),
+        el("div", { class: "inv-grid" },
+          el("button", { class: "inv-item" + (selected === "PET" ? " on" : ""), title: "Move your pet's spot", onclick: () => { selected = selected === "PET" ? null : "PET"; drawAll(); } }, el("span", {}, p.pet ? petEmoji(p.pet) : "🛏️"), el("small", {}, "Pet spot")),
+          ...owned.map(([k, n]) => { const d = DECOR_BY[k]; return el("button", { class: "inv-item" + (selected === k ? " on" : "") + " r" + d.rarity, title: d.name, onclick: () => { selected = selected === k ? null : k; drawAll(); } }, el("span", {}, d.emoji), el("small", {}, d.name + (n > 1 ? " ×" + n : ""))); }),
+          !owned.length ? el("p", { class: "muted small", style: "grid-column:1/-1" }, "Nothing to place yet. Finish a goal or check in on a reading day to find things.") : null));
+    }
+    function drawPet() {
+      const pet = p.pet;
+      if (!pet) { fill(petCorner, el("div", { class: "eyebrow" }, "Pet corner"), el("p", { class: "muted small" }, mine ? "No pet yet. Adopt one on your profile page and it'll live here." : "No pet here yet.")); return; }
+      const pl = petLevelOf(pet.xp || 0), stage = petStage(pl);
+      const earnedBadges = (p.badges || []).map(b => BADGE_BY_KEY[b.key]).filter(Boolean);
+      fill(petCorner, el("div", { class: "eyebrow" }, "Pet corner"),
+        el("div", { class: "row", style: "align-items:flex-start;gap:18px;margin-top:8px" }, petSprite(p, room, "lg"),
+          el("div", { style: "flex:1;min-width:220px" }, el("div", { class: "lvl-line" }, el("b", {}, pet.name), el("span", { class: "muted" }, ` · ${PETS.find(z => z.key === pet.type)?.name || "Pet"} · ${PET_STAGE_NAMES[stage]} · Lv ${pl}`)),
+            mine ? el("div", { class: "row", style: "margin-top:6px" }, el("button", { class: "btn sm primary", disabled: (me.coins || 0) < PET_FEED_COST, onclick: async () => { me.coins -= PET_FEED_COST; const ap = myPets().find(z => z.id === pet.id); if (ap) { ap.xp = (ap.xp || 0) + PET_FEED_XP; setActivePet(ap.id); } await saveRoom(); say(petVoice(me.pet).fed); drawPet(); updateTopbar(); } }, `Feed · ${PET_FEED_COST} coins`), el("button", { class: "btn sm ghost", onclick: () => say(petVoice(pet).idle) }, "Pet them")) : null,
+            mine ? el("div", { class: "field", style: "margin-top:12px" }, el("label", {}, "Outfit"), el("div", { class: "outfit-grid" }, ...OUTFITS.map(o => { const owned = !o[4] || room.owned["outfit:" + o[0]]; const on = room.outfit.includes(o[0]); return el("button", { class: "av-opt" + (on ? " on" : "") + (owned ? "" : " locked"), title: owned ? o[2] + " (" + o[3] + ")" : o[2] + " · earned by finishing goals", onclick: async () => { if (!owned) { toast(o[2] + " comes from finishing a goal."); return; } if (on) room.outfit = room.outfit.filter(k => k !== o[0]); else { room.outfit = room.outfit.filter(k => OUTFIT_BY[k].slot !== o[3]); room.outfit.push(o[0]); } drawAll(); await saveRoom(); } }, owned ? o[1] : "🔒"); }))) : null,
+            mine ? el("div", { class: "field", style: "margin-top:10px" }, el("label", {}, "Collar · wear a badge"), el("div", { class: "outfit-grid" }, el("button", { class: "av-opt" + (!room.collar ? " on" : ""), title: "No collar", onclick: async () => { room.collar = null; drawAll(); await saveRoom(); } }, "—"), ...earnedBadges.slice(0, 40).map(b => el("button", { class: "av-opt" + (room.collar === b.key ? " on" : ""), title: b.name, onclick: async () => { room.collar = b.key; drawAll(); await saveRoom(); } }, b.icon))), !earnedBadges.length ? el("div", { class: "hint" }, "Earn a badge and it can hang on the collar.") : null) : null)));
+    }
+    // ----- goals -----
+    function drawGoals() {
+      const goals = mine ? (me.goals || (me.goals = [])) : (p.goals || []);
+      const open = goals.filter(g => !g.done), done = goals.filter(g => g.done).slice(-8).reverse();
+      const txt = el("input", { class: "input", placeholder: "e.g. Finish two books this month, read 20 minutes a day, try a new genre" }); const lvl = el("select", { class: "input", style: "width:auto" }, ...Object.entries(GOAL_LEVELS).map(([k, v]) => el("option", { value: k }, v.name)));
+      fill(goalsBox, el("div", { class: "eyebrow" }, mine ? "My goals" : "Goals"), el("p", { class: "muted small" }, "Set your own reading goals and mark how hard they are. Finishing one pays coins and XP and drops something for your room. Difficult goals can drop an outfit piece."),
+        ...open.map(g => el("div", { class: "goal-row" }, el("span", { class: "goal-lvl " + g.level }, GOAL_LEVELS[g.level].name), el("span", { class: "goal-text" }, g.text),
+          mine ? el("div", { class: "row", style: "gap:4px;margin-left:auto" }, el("button", { class: "btn sm primary", onclick: async () => { g.done = true; g.doneAt = new Date().toISOString(); award(GOAL_LEVELS[g.level].reward); const drops = GOAL_LEVELS[g.level].drops.map(d => d === "outfit" ? grantOutfit() : grantDecor(d)); const ap = me.pet && myPets().find(z => z.id === me.pet.id); if (ap) { ap.xp = (ap.xp || 0) + (g.level === "hard" ? 40 : g.level === "medium" ? 20 : 10); setActivePet(ap.id); } await saveProfile({ goals: me.goals, room: me.room, pets: myPets(), pet: me.pet }); drops.forEach(d => toast(`${d.emoji} ${d.name} for your room!`, "badge-toast")); say(`You did it! "${g.text}" — ` + petVoice(me.pet).grow); drawAll(); updateTopbar(); } }, "Done ✓"), el("button", { class: "icon-btn", title: "Remove", onclick: async () => { goals.splice(goals.indexOf(g), 1); await saveProfile({ goals: me.goals }); drawGoals(); } }, "✕")) : null)),
+        !open.length ? el("p", { class: "muted small", style: "font-style:italic" }, mine ? "No open goals. Your pet would love one." : "No open goals.") : null,
+        mine ? el("form", { class: "row", style: "margin-top:10px;flex-wrap:wrap", onsubmit: async (e) => { e.preventDefault(); if (!txt.value.trim()) return; goals.push({ id: uid(), text: txt.value.trim().slice(0, 120), level: lvl.value, done: false, created: new Date().toISOString() }); await saveProfile({ goals: me.goals }); txt.value = ""; say(petVoice(me.pet).goal + " Good. I'll keep an eye on it."); drawGoals(); } }, el("div", { style: "flex:1;min-width:220px" }, txt), lvl, el("button", { class: "btn sm", type: "submit" }, "Add goal")) : null,
+        done.length ? el("div", { style: "margin-top:12px" }, el("div", { class: "eyebrow" }, "Finished"), ...done.map(g => el("div", { class: "goal-row done" }, el("span", { class: "goal-lvl " + g.level }, GOAL_LEVELS[g.level].name), el("span", { class: "goal-text" }, g.text), el("span", { class: "muted small", style: "margin-left:auto" }, new Date(g.doneAt).toLocaleDateString())))) : null);
+    }
+    // ----- pet chat (not saved) -----
+    const chatLog = el("div", { class: "chat-log" });
+    function say(text) { if (!p.pet) return; chatLog.append(el("div", { class: "bubble pet" }, el("span", { class: "who" }, petEmoji(p.pet) + " " + p.pet.name), text)); chatLog.scrollTop = chatLog.scrollHeight; }
+    function meSay(text) { chatLog.append(el("div", { class: "bubble me" }, text)); chatLog.scrollTop = chatLog.scrollHeight; }
+    function petReply(input) {
+      const v = petVoice(p.pet); const t = input.toLowerCase(); const st = stats(me); const reading = (me.tbr || []).filter(x => x.reading);
+      if (/goal/.test(t)) return v.goal + " Type it in the goals box and mark how hard it is.";
+      if (/read|book/.test(t)) return reading.length ? v.book(reading[0].title) + ` You're ${reading[0].progress || 0}% in.` : "What are you reading? Add it to your list and I'll follow along.";
+      if (/food|feed|hungry|treat|snack/.test(t)) return "Feed me with the button. " + v.fed;
+      if (/name/.test(t)) return `I'm ${p.pet.name}. You named me. It's a good name.`;
+      if (/level|grow|big/.test(t)) return `I'm level ${petLevelOf(p.pet.xp || 0)}. Every time you save your shelf or check in, I grow. ` + v.grow;
+      if (/streak|today/.test(t)) return st.last_checkin === dayKey() ? `You already read today. ${st.read_streak || 1} days running. I noticed.` : "Did you read today? Tap the check-in on My Books and I'll count it.";
+      if (/hi|hello|hey/.test(t)) return v.hi[Math.floor(Math.random() * v.hi.length)];
+      if (/love|good|thank/.test(t)) return v.fed;
+      return [v.idle, v.hi[1], "Tell me about your book.", "Set a goal and I'll cheer."][Math.floor(Math.random() * 4)];
+    }
+    function drawChat() {
+      if (!p.pet) { chatBox.hidden = true; return; }
+      const inp = el("input", { class: "input", placeholder: mine ? `Say something to ${p.pet.name}…` : `${p.display_name}'s pet is listening…` });
+      fill(chatBox, el("div", { class: "eyebrow" }, "Talk to " + p.pet.name), el("p", { class: "muted small" }, "Your pet answers in character from what it knows about your shelf, goals and check-ins. Chats are not saved. Every visit starts fresh."), chatLog,
+        el("form", { class: "row", onsubmit: (e) => { e.preventDefault(); if (!inp.value.trim()) return; meSay(inp.value.trim()); const r = petReply(inp.value.trim()); inp.value = ""; setTimeout(() => say(r), 400); } }, el("div", { style: "flex:1" }, inp), el("button", { class: "btn sm", type: "submit" }, "Send")));
+      if (!chatLog.childElementCount) {
+        const v = petVoice(p.pet); const st = stats(me); const reading = (me.tbr || []).filter(x => x.reading); const open = (me.goals || []).filter(g => !g.done);
+        say(v.hi[Math.floor(Math.random() * v.hi.length)]);
+        if (mine) setTimeout(() => { if (reading.length) say(v.book(reading[0].title)); else if (!open.length) say(v.goal); else if (st.last_checkin !== dayKey()) say("Read anything today? Check in on My Books and I'll grow a little."); }, 900);
+      }
+    }
+    function drawAll() { drawGrid(); drawInv(); drawPet(); drawGoals(); drawChat(); }
+    const vis = el("input", { type: "checkbox", checked: room.visible !== false, onchange: async () => { room.visible = vis.checked; await saveRoom(); toast(vis.checked ? "Friends can visit your room." : "Room is private now."); } });
+    page.append(el("div", { class: "page-head" }, el("div", {}, el("div", { class: "eyebrow" }, mine ? "Your place" : p.display_name + "'s place"), el("h1", {}, mine ? "My Room" : p.display_name + "'s Room"), el("p", { class: "sub" }, mine ? "Decorate with things you earn from goals and reading days. Your pet lives in the corner. Click a tile to place or pick up." : "A peek at how they've set things up.")),
+      mine ? el("label", { class: "row", style: "gap:8px;cursor:pointer" }, vis, el("span", { class: "small" }, "Friends can visit")) : null),
+      el("div", { class: "room-wrap" }, grid), inv, petCorner, goalsBox, chatBox);
     drawAll(); return page;
   }
 
