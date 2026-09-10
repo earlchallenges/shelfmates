@@ -177,7 +177,7 @@
   const bannerThemeOf = (b) => b.theme || "Classic";
   // ---------- themes (whole-site looks; some need badges) ----------
   const THEMES = [
-    { key: "system",   name: "Match my device", need: 0,  desc: "Light or dark, whatever your phone is set to.", sw: ["#F6F5F1", "#141816", "#2E6E4E"] },
+    { key: "system",   name: "Default",         need: 0,  desc: "The original look. Light or dark, whatever your phone is set to.", sw: ["#F6F5F1", "#141816", "#2E6E4E"] },
     { key: "light",    name: "Light",           need: 0,  desc: "Warm off-white paper.", sw: ["#F6F5F1", "#FFFFFF", "#1C2320"] },
     { key: "dark",     name: "Dark",            need: 0,  desc: "Soft charcoal green.", sw: ["#141816", "#1D2321", "#EEF0EC"] },
     { key: "sepia",    name: "Old Paper",       need: 0,  desc: "Like a book that's been loved a while.", sw: ["#F1E7D0", "#FAF4E6", "#3B2F1E"] },
@@ -188,6 +188,8 @@
     { key: "ember",    name: "Ember",           need: 20, desc: "Dark and warm, like a fireside.", sw: ["#1A1210", "#241816", "#F7EBE4"] },
     { key: "lavender", name: "Lavender Dusk",   need: 30, desc: "Pale purple evening light.", sw: ["#ECE8F6", "#F8F6FD", "#2B2442"] },
     { key: "gilded",   name: "Gilded Night",    need: 50, desc: "Black and gold. For the serious collector.", sw: ["#141210", "#1D1A15", "#F1D17A"] },
+    { key: "aurora",   name: "Aurora Night",    need: 100, desc: "Polar dark with northern-light color. A hundred badges earns it.", sw: ["#07111B", "#0E1B2A", "#7DF0C8"] },
+    { key: "secret",   name: "???",             need: 9999, soon: true, desc: "Something special is on the way. Keep collecting.", sw: ["#2a2a2a", "#3a3a3a", "#666"] },
   ];
   const ACCENTS = [
     { key: "green", name: "Bookcloth green", hex: "#2E6E4E", need: 0 },
@@ -929,7 +931,7 @@
   async function pageBadges() {
     const m = metrics(me, friends.length); const n = badgeCount(me); const total = BADGES.length;
     const ach = BADGES.filter(b => !b.monthly); const earnedKeys = new Set((me.badges || []).map(b => b.key));
-    const nextUnlock = [...ACCENTS.map(a => ({ name: a.name + " accent", need: a.need })), ...BANNERS.filter(b => b.need).map(b => ({ name: b.name + " banner", need: b.need })), ...THEMES.filter(t => t.need).map(t => ({ name: t.name + " theme", need: t.need })), ...AVATAR_SETS.filter(a => a.need).map(a => ({ name: a.set + " avatars", need: a.need }))].filter(x => x.need > n).sort((a, b) => a.need - b.need)[0];
+    const nextUnlock = [...ACCENTS.map(a => ({ name: a.name + " accent", need: a.need })), ...BANNERS.filter(b => b.need).map(b => ({ name: b.name + " banner", need: b.need })), ...THEMES.filter(t => t.need && !t.soon).map(t => ({ name: t.name + " theme", need: t.need })), ...AVATAR_SETS.filter(a => a.need).map(a => ({ name: a.set + " avatars", need: a.need }))].filter(x => x.need > n).sort((a, b) => a.need - b.need)[0];
     const nextFrame = FRAMES.find(f => f.level > levelOf(me.xp || 0));
     const page = el("div", { class: "stack" });
     page.append(el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "Badges"), el("p", { class: "sub" }, `${n} of ${total} earned. ` + (nextUnlock ? `Next unlock at ${nextUnlock.need}: ${nextUnlock.name}.` : "You've unlocked everything.") + (nextFrame ? ` Next frame at level ${nextFrame.level}: ${nextFrame.name}.` : "")))));
@@ -1036,8 +1038,8 @@
     const showReading = el("input", { type: "checkbox", checked: me.show_reading !== false });
     const themeGrid = el("div", { class: "theme-grid" });
     const drawThemes = () => fill(themeGrid, ...THEMES.map(t => { const cur = (me.stats && me.stats.theme) || "system"; const ok = n >= t.need;
-      return el("button", { class: "theme-opt" + (t.key === cur ? " on" : "") + (ok ? "" : " locked"), title: t.desc + (ok ? "" : ` · unlocks at ${t.need} badges`), onclick: async () => { if (!ok) { toast(`${t.name} unlocks at ${t.need} badges. You have ${n}.`); return; } const st = stats(me); st.theme = t.key; applyTheme(); drawThemes(); try { await saveProfile({ stats: st }); toast(t.name + " it is."); } catch (e) { toast(e.message); } } },
-        el("div", { class: "theme-sw", style: `background:${t.sw[0]}` }, el("span", { style: `background:${t.sw[1]}` }, el("i", { style: `background:${t.sw[2]}` }))), el("div", { class: "bn-name" }, t.name), el("small", { class: "muted" }, ok ? (t.key === cur ? "Selected" : t.need ? "Unlocked" : "") : `${t.need} badges`)); }));
+      return el("button", { class: "theme-opt" + (t.key === cur ? " on" : "") + (ok ? "" : " locked") + (t.soon ? " soon" : ""), title: t.desc + (t.soon ? "" : ok ? "" : ` · unlocks at ${t.need} badges`), onclick: async () => { if (t.soon) { toast("Not yet. Something special is on the way."); return; } if (!ok) { toast(`${t.name} unlocks at ${t.need} badges. You have ${n}.`); return; } const st = stats(me); st.theme = t.key; applyTheme(); drawThemes(); try { await saveProfile({ stats: st }); toast(t.name + " it is."); } catch (e) { toast(e.message); } } },
+        el("div", { class: "theme-sw", style: `background:${t.sw[0]}` }, el("span", { style: `background:${t.sw[1]}` }, el("i", { style: `background:${t.sw[2]}` }))), el("div", { class: "bn-name" }, t.name), el("small", { class: "muted" }, t.soon ? "Unlocks later" : ok ? (t.key === cur ? "Selected" : t.need ? "Unlocked" : "") : `${t.need} badges`)); }));
     drawThemes();
     const page = el("div", { class: "stack" });
     const myLevel = levelOf(me.xp || 0);
