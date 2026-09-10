@@ -50,6 +50,9 @@
     checkin: { coins: 8,  xp: 20,  label: "read today" },
     progress:{ coins: 2,  xp: 5,   label: "progress update" },
     finish:  { coins: 20, xp: 40,  label: "finished a book" },
+    goalEasy:{ coins: 15, xp: 30,  label: "easy goal" },
+    goalMed: { coins: 40, xp: 80,  label: "medium goal" },
+    goalHard:{ coins: 100, xp: 200, label: "difficult goal" },
   };
   const levelOf = (xp) => Math.min(99, Math.floor(Math.sqrt(Math.max(0, xp) / 100)) + 1);
   const xpForLevel = (l) => 100 * (l - 1) * (l - 1);
@@ -211,6 +214,9 @@
   tierBadges("finished", "📕", ["Finished One","Five Down","Ten Finished","Twenty-Five","Half a Hundred","Hundred Club","Two Hundred","Five Hundred","A Thousand"], [1,5,10,25,50,100,200,500,1000], "finished", n => `Log ${n} finished book${n>1?"s":""} in My Books.`);
   tierBadges("notes", "✍️", ["First Note","Note Taker","Scribbler","Commonplace Book","Marginalia Master"], [1,5,25,100,250], "notes", n => `Write ${n} quote${n>1?"s":""}, note${n>1?"s":""} or journal entr${n>1?"ies":"y"}.`);
   tierBadges("quotes", "❝", ["Quotable","Collector of Lines","Anthology"], [1,10,50], "quotes", n => `Save ${n} quote${n>1?"s":""}.`);
+  tierBadges("goals", "🎯", ["Goal Setter","Follow Through","Habit Builder","Unstoppable"], [1,5,15,40], "goalsDone", n => `Finish ${n} goal${n>1?"s":""} you set for yourself.`);
+  tierBadges("hard", "🧗", ["Hard Mode","Mountain Climber"], [1,5], "hardGoals", n => `Finish ${n} goal${n>1?"s":""} you marked difficult.`);
+  tierBadges("bookmarks", "📑", ["First Bookmark","Bookmark Drawer","Bookmark Collector","Full Set"], [1,10,25,42], "bookmarks", n => `Collect ${n} bookmark${n>1?"s":""}.`);
   tierBadges("tbr", "🔖", ["Next Up","Stacked","Tower of Books"], [1,5,15], "tbr", n => `Keep ${n} book${n>1?"s":""} on your To Be Read list.`);
   tierBadges("checkin", "☀️", ["Read Today","Reading Week","Thirty Days","Hundred Days of Reading","A Year of Pages"], [1,7,30,100,365], "checkins", n => `Check in "I read today" on ${n} day${n>1?"s":""}.`);
   tierBadges("rstreak", "🔥", ["Three Days Straight","Seven Straight","Thirty Straight"], [3,7,30], "readStreak", n => `Read ${n} days in a row.`);
@@ -226,6 +232,127 @@
     BADGES.push({ key: `month_${mk}`, name: `${MONTH_NAMES[m - 1]} ${y}`, icon: MONTH_ICONS[m - 1], metric: "month", month: mk, need: 1, how: `Save your shelf during ${MONTH_NAMES[m - 1]} ${y}.`, monthly: true });
   }
   const BADGE_BY_KEY = Object.fromEntries(BADGES.map(b => [b.key, b]));
+
+  // ---------- goals & bookmarks ----------
+  const GOAL_LEVELS = { easy: { name: "Easy", reward: "goalEasy" }, medium: { name: "Medium", reward: "goalMed" }, hard: { name: "Difficult", reward: "goalHard" } };
+  // Each bookmark: key, name, tier, css background, tassel color, charm, optional glow color (difficult), plus a hint for the book of bookmarks.
+  const BOOKMARKS = [
+    // easy — 16
+    { key: "linen",    name: "Linen Stripe",  tier: "easy", css: "repeating-linear-gradient(90deg,#F3E9D2 0 6px,#E4D3B0 6px 8px)", tassel: "#B8891B", charm: "" },
+    { key: "meadow",   name: "Meadow Dots",   tier: "easy", css: "radial-gradient(circle at 30% 20%,#fff 0 2px,transparent 3px),radial-gradient(circle at 70% 60%,#fff 0 2px,transparent 3px),radial-gradient(circle at 40% 85%,#fff 0 2px,transparent 3px),#7FB77E", tassel: "#3E7A5A", charm: "🌼" },
+    { key: "plane",    name: "Paper Plane",   tier: "easy", css: "linear-gradient(180deg,#DCEBFA,#B5D4F4)", tassel: "#378ADD", charm: "✈️" },
+    { key: "sunny",    name: "Sunny Side",    tier: "easy", css: "linear-gradient(180deg,#FDE68A,#F59E0B)", tassel: "#B45309", charm: "☀️" },
+    { key: "ticket",   name: "Blue Ticket",   tier: "easy", css: "repeating-linear-gradient(0deg,#2A6F8F 0 10px,#3E86A8 10px 20px)", tassel: "#F1D17A", charm: "🎟️" },
+    { key: "mint",     name: "Mint Chevron",  tier: "easy", css: "repeating-linear-gradient(135deg,#9FE1CB 0 8px,#E1F5EE 8px 16px)", tassel: "#0F6E56", charm: "" },
+    { key: "peach",    name: "Peach Wave",    tier: "easy", css: "radial-gradient(circle at 50% 0,#F5C4B3 0 18px,transparent 19px),radial-gradient(circle at 50% 40px,#F5C4B3 0 18px,transparent 19px),radial-gradient(circle at 50% 80px,#F5C4B3 0 18px,transparent 19px),#FAECE7", tassel: "#D85A30", charm: "🍑" },
+    { key: "libcard",  name: "Library Card",  tier: "easy", css: "repeating-linear-gradient(0deg,#FFFDF7 0 12px,#D3D1C7 12px 13px)", tassel: "#888780", charm: "📇" },
+    { key: "polka",    name: "Polka",         tier: "easy", css: "radial-gradient(circle,#fff 0 3px,transparent 4px) 0 0/14px 14px,#D4537E", tassel: "#993556", charm: "" },
+    { key: "sky",      name: "Sky Ribbon",    tier: "easy", css: "linear-gradient(180deg,#85B7EB,#E6F1FB)", tassel: "#185FA5", charm: "☁️" },
+    { key: "leaf",     name: "Autumn Leaf",   tier: "easy", css: "linear-gradient(180deg,#F59E0B,#B45309 60%,#7C2D12)", tassel: "#7C2D12", charm: "🍂" },
+    { key: "seafoam",  name: "Seafoam",       tier: "easy", css: "linear-gradient(180deg,#CFFAFE,#5DCAA5)", tassel: "#0F6E56", charm: "🐚" },
+    { key: "gingham",  name: "Gingham",       tier: "easy", css: "repeating-linear-gradient(0deg,rgba(216,90,48,.35) 0 8px,transparent 8px 16px),repeating-linear-gradient(90deg,rgba(216,90,48,.35) 0 8px,transparent 8px 16px),#FFF8F4", tassel: "#D85A30", charm: "" },
+    { key: "lemonade", name: "Lemonade",      tier: "easy", css: "repeating-linear-gradient(0deg,#FDE68A 0 14px,#FFFFFF 14px 28px)", tassel: "#EF9F27", charm: "🍋" },
+    { key: "gridpaper",name: "Grid Paper",    tier: "easy", css: "repeating-linear-gradient(0deg,#B5D4F4 0 1px,transparent 1px 10px),repeating-linear-gradient(90deg,#B5D4F4 0 1px,transparent 1px 10px),#fff", tassel: "#378ADD", charm: "✏️" },
+    { key: "cocoa",    name: "Cocoa",         tier: "easy", css: "linear-gradient(180deg,#8B5E3C,#5B3A22)", tassel: "#F3E9D2", charm: "☕" },
+    // medium — 12
+    { key: "inkgold",  name: "Ink & Gold",    tier: "medium", css: "linear-gradient(180deg,#1C2320 0 70%,#B8891B 70% 74%,#1C2320 74% 86%,#B8891B 86% 90%,#1C2320 90%)", tassel: "#F1D17A", charm: "🖋️" },
+    { key: "nightstr", name: "Night Stripe",  tier: "medium", css: "repeating-linear-gradient(45deg,#1B2340 0 10px,#2A3A6B 10px 20px)", tassel: "#7FC0DD", charm: "🌙" },
+    { key: "fern",     name: "Fern Frond",    tier: "medium", css: "repeating-linear-gradient(-45deg,#1F4D3A 0 6px,#3E7A5A 6px 8px,#1F4D3A 8px 14px)", tassel: "#A3B86C", charm: "🌿" },
+    { key: "maplines", name: "Map Lines",     tier: "medium", css: "repeating-radial-gradient(circle at 30% 30%,#C9A96E 0 2px,#F3E9D2 2px 12px)", tassel: "#7A4B2A", charm: "🧭" },
+    { key: "rosevine", name: "Rose Vine",     tier: "medium", css: "radial-gradient(circle at 25% 20%,#E08A9C 0 5px,transparent 6px),radial-gradient(circle at 70% 50%,#E08A9C 0 5px,transparent 6px),radial-gradient(circle at 35% 80%,#E08A9C 0 5px,transparent 6px),linear-gradient(180deg,#4A1B28,#7A2E40)", tassel: "#E08A9C", charm: "🌹" },
+    { key: "copper",   name: "Copper Chevron",tier: "medium", css: "repeating-linear-gradient(135deg,#B87333 0 8px,#D69A5A 8px 12px,#7A4A1F 12px 20px)", tassel: "#F3D9B8", charm: "" },
+    { key: "deepsea",  name: "Deep Sea",      tier: "medium", css: "linear-gradient(180deg,#0B2540,#123B52 50%,#2A6F8F)", tassel: "#A5F3FC", charm: "🐋" },
+    { key: "amberw",   name: "Amber Waves",   tier: "medium", css: "repeating-radial-gradient(circle at 50% 120%,#D4A93A 0 8px,#8A6412 8px 16px)", tassel: "#FFE9A8", charm: "🌾" },
+    { key: "plumdam",  name: "Plum Damask",   tier: "medium", css: "radial-gradient(circle at 50% 50%,#B99AD6 0 4px,transparent 5px) 0 0/18px 18px,#4C1D95", tassel: "#F1D17A", charm: "" },
+    { key: "plaid",    name: "Forest Plaid",  tier: "medium", css: "repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 6px,transparent 6px 18px),repeating-linear-gradient(90deg,rgba(0,0,0,.25) 0 6px,transparent 6px 18px),#2E6E4E", tassel: "#F1D17A", charm: "🦌" },
+    { key: "lantern",  name: "Lantern",       tier: "medium", css: "radial-gradient(circle at 50% 30%,#FDE68A 0 12px,#F59E0B 13px 20px,#7C2D12 21px)", tassel: "#F59E0B", charm: "🏮" },
+    { key: "marble",   name: "Marble",        tier: "medium", css: "linear-gradient(120deg,#F8FAFC 0 30%,#CBD5E1 32% 34%,#F8FAFC 36% 60%,#94A3B8 62% 63%,#F8FAFC 65%)", tassel: "#64748B", charm: "🏛️" },
+    // difficult — 10, all glow
+    { key: "gilded",   name: "Gilded Edge",   tier: "hard", css: "linear-gradient(90deg,#F1D17A 0 4px,#1C2320 4px calc(100% - 4px),#F1D17A calc(100% - 4px))", tassel: "#F1D17A", charm: "👑", glow: "#F1D17A" },
+    { key: "dscale",   name: "Dragon Scale",  tier: "hard", css: "radial-gradient(circle at 50% 0,#DC2626 0 7px,transparent 8px) 0 0/16px 12px,radial-gradient(circle at 0 0,#7F1D1D 0 7px,transparent 8px) 8px 6px/16px 12px,#991B1B", tassel: "#F59E0B", charm: "🐉", glow: "#F97316" },
+    { key: "auroram",  name: "Aurora Ribbon", tier: "hard", css: "linear-gradient(180deg,#0B2540,#1E6E6E 35%,#63B58F 55%,#B99AD6 80%,#0B2540)", tassel: "#63B58F", charm: "✨", glow: "#63B58F" },
+    { key: "starfall", name: "Starfall",      tier: "hard", css: "radial-gradient(circle at 20% 15%,#fff 0 1.5px,transparent 2.5px),radial-gradient(circle at 70% 35%,#fff 0 1.5px,transparent 2.5px),radial-gradient(circle at 40% 60%,#fff 0 1px,transparent 2px),radial-gradient(circle at 80% 85%,#fff 0 1.5px,transparent 2.5px),linear-gradient(180deg,#0E1230,#2A3A6B)", tassel: "#fff", charm: "🌠", glow: "#93C5FD" },
+    { key: "emberg",   name: "Ember Glow",    tier: "hard", css: "linear-gradient(180deg,#F59E0B,#DC2626 60%,#450A0A)", tassel: "#F59E0B", charm: "🔥", glow: "#F97316" },
+    { key: "frostc",   name: "Frost Crystal", tier: "hard", css: "repeating-linear-gradient(60deg,#DBEAFE 0 6px,#fff 6px 12px),repeating-linear-gradient(-60deg,rgba(191,219,254,.6) 0 6px,transparent 6px 12px)", tassel: "#93C5FD", charm: "❄️", glow: "#BFDBFE" },
+    { key: "velvet",   name: "Royal Velvet",  tier: "hard", css: "linear-gradient(90deg,#3B1E5A,#5A2D82 50%,#3B1E5A)", tassel: "#F1D17A", charm: "👑", glow: "#B99AD6" },
+    { key: "phfeather",name: "Phoenix Feather",tier: "hard", css: "linear-gradient(180deg,#FDE68A,#F97316 40%,#DC2626 70%,#7F1D1D)", tassel: "#FDE68A", charm: "🐦‍🔥", glow: "#FDE68A" },
+    { key: "nebula",   name: "Nebula",        tier: "hard", css: "radial-gradient(circle at 30% 30%,#D946EF 0 10px,transparent 30px),radial-gradient(circle at 70% 70%,#22D3EE 0 10px,transparent 30px),linear-gradient(180deg,#1E1B4B,#0F172A)", tassel: "#22D3EE", charm: "🪐", glow: "#D946EF" },
+    { key: "obsgold",  name: "Obsidian Gold", tier: "hard", css: "repeating-linear-gradient(0deg,#050505 0 16px,#F1D17A 16px 17px)", tassel: "#F1D17A", charm: "💎", glow: "#F1D17A" },
+    // legendary — earned by patterns of goals, not picked
+    { key: "threemoons", name: "Three Moons",     tier: "legend", css: "radial-gradient(circle at 50% 18%,#FDE68A 0 7px,transparent 8px),radial-gradient(circle at 50% 50%,#FDE68A 0 7px,transparent 8px),radial-gradient(circle at 50% 82%,#FDE68A 0 7px,transparent 8px),linear-gradient(180deg,#0B1026,#1B2340)", tassel: "#FDE68A", charm: "🌙", glow: "#FDE68A", how: "Finish a difficult goal in three different months." },
+    { key: "marathon",   name: "Marathon",        tier: "legend", css: "repeating-linear-gradient(0deg,#B3556A 0 8px,#F7E3E8 8px 10px,#2A6F8F 10px 18px,#F7E3E8 18px 20px)", tassel: "#F1D17A", charm: "🏅", glow: "#F1D17A", how: "Finish 25 goals in total." },
+    { key: "discipline", name: "Quiet Discipline",tier: "legend", css: "linear-gradient(180deg,#F3E9D2,#C9A96E)", tassel: "#5B3A22", charm: "🕯️", glow: "#F3E9D2", how: "Finish at least one goal in six different months." },
+    { key: "mcrown",     name: "Mountain Crown",  tier: "legend", css: "linear-gradient(180deg,#E2E8F0 0 30%,#94A3B8 30% 55%,#1E293B 55%)", tassel: "#F1D17A", charm: "🏔️", glow: "#E2E8F0", how: "Finish ten difficult goals." },
+  ];
+  const BOOKMARK_BY = Object.fromEntries(BOOKMARKS.map(b => [b.key, b]));
+  const TIER_NAMES = { easy: "Easy", medium: "Medium", hard: "Difficult", legend: "Legendary" };
+  const myBookmarks = () => { const st = stats(me); return st.bookmarks || (st.bookmarks = []); };
+  function bookmarkEl(def, size = "", extra = {}) {
+    const b = el("div", { class: "bm " + size + (def.glow ? " glow" : "") + (extra.locked ? " locked" : ""), style: `--bmbg:${def.css};--tassel:${def.tassel};--glow:${def.glow || "transparent"}`, title: def.name },
+      el("div", { class: "bm-body" }, def.charm ? el("span", { class: "bm-charm" }, def.charm) : null), el("div", { class: "bm-tassel" }));
+    return b;
+  }
+  function goalMonths(goals, level) { return new Set(goals.filter(g => g.done && (!level || g.level === level)).map(g => (g.doneAt || "").slice(0, 7))); }
+  // how many designs in a tier you may choose from right now
+  function choicesFor(tier, goals) {
+    const d = goals.filter(g => g.done); const easy = d.filter(g => g.level === "easy").length, med = d.filter(g => g.level === "medium").length, hard = d.filter(g => g.level === "hard").length;
+    if (tier === "easy") return Math.min(16, 1 + easy + med);          // 2 choices on your first easy goal, one more per easy or medium after
+    if (tier === "medium") return Math.min(12, 1 + med + hard);        // 2 on the first medium, one more per medium or difficult
+    return Math.min(10, 1 + hard);                                     // 2 on the first difficult, one more per difficult
+  }
+  function legendUnlocks(goals) {
+    const d = goals.filter(g => g.done); const out = [];
+    if (goalMonths(goals, "hard").size >= 3) out.push("threemoons");
+    if (d.length >= 25) out.push("marathon");
+    if (goalMonths(goals).size >= 6) out.push("discipline");
+    if (d.filter(g => g.level === "hard").length >= 10) out.push("mcrown");
+    return out;
+  }
+  // pick-a-bookmark window after finishing a goal
+  function pickBookmark(tier, onDone) {
+    const goals = me.goals || []; const owned = new Set(myBookmarks());
+    const pool = BOOKMARKS.filter(b => b.tier === tier); const n = choicesFor(tier, goals);
+    const choices = pool.slice(0, n).filter(b => !owned.has(b.key));
+    const overlay = el("div", { class: "crop-overlay" });
+    if (!choices.length) { fill(overlay, el("div", { class: "crop-panel" }, el("h2", {}, "All " + TIER_NAMES[tier].toLowerCase() + " bookmarks collected"), el("p", { class: "muted" }, "Nothing new to pick this time. Keep going for the next tier and the legendary ones."), el("div", { class: "row", style: "justify-content:flex-end" }, el("button", { class: "btn primary", onclick: () => { overlay.remove(); onDone(null); } }, "Okay")))); document.body.append(overlay); return; }
+    fill(overlay, el("div", { class: "crop-panel bm-pick" },
+      el("div", { class: "eyebrow" }, TIER_NAMES[tier] + " goal finished"), el("h2", {}, "Pick a bookmark"),
+      el("p", { class: "muted small" }, `You can choose from ${choices.length} right now. Finish more goals to unlock more designs to choose from.`),
+      el("div", { class: "bm-choices" }, ...choices.map(b => el("button", { class: "bm-choice", onclick: async () => { myBookmarks().push(b.key); await saveProfile({ stats: me.stats }); overlay.remove(); toast(`🔖 ${b.name} added to your bookmarks`, "badge-toast"); onDone(b); } }, bookmarkEl(b, "md"), el("b", {}, b.name)))),
+      el("p", { class: "muted small", style: "margin-top:6px" }, tier === "hard" ? "Difficult bookmarks glow." : "")));
+    document.body.append(overlay);
+  }
+  // the little book you flip through
+  function openBookmarkBook() {
+    const owned = new Set(myBookmarks()); const goals = me.goals || [];
+    const tiers = ["easy", "medium", "hard", "legend"]; let pageIx = 0;
+    const overlay = el("div", { class: "crop-overlay", onclick: (e) => { if (e.target === overlay) overlay.remove(); } });
+    const book = el("div", { class: "bm-book" });
+    const readingBooks = () => (me.tbr || []).filter(x => x.reading);
+    function draw() {
+      const tier = tiers[pageIx]; const pool = BOOKMARKS.filter(b => b.tier === tier); const n = tier === "legend" ? pool.length : choicesFor(tier, goals);
+      const have = pool.filter(b => owned.has(b.key)).length;
+      fill(book,
+        el("div", { class: "bm-page left" }, el("div", { class: "bm-page-title" }, TIER_NAMES[tier] + " bookmarks"), el("div", { class: "muted small" }, `${have} of ${pool.length} collected`),
+          el("p", { class: "muted small", style: "margin-top:10px" }, tier === "easy" ? "Finish an easy goal and pick one. Every easy or medium goal you finish unlocks another design to choose from." : tier === "medium" ? "Medium goals earn these. Medium and difficult goals unlock more choices." : tier === "hard" ? "Difficult goals only. These glow." : "Not picked. Earned by patterns of goals over time."),
+          el("div", { class: "bm-slots" }, ...pool.slice(0, Math.ceil(pool.length / 2)).map((b, i) => slot(b, i < n)))),
+        el("div", { class: "bm-page right" }, el("div", { class: "bm-slots" }, ...pool.slice(Math.ceil(pool.length / 2)).map((b, i) => slot(b, i + Math.ceil(pool.length / 2) < n))),
+          el("div", { class: "row", style: "justify-content:space-between;margin-top:auto" }, el("button", { class: "btn sm ghost", disabled: pageIx === 0, onclick: () => { pageIx--; draw(); } }, "← Prev"), el("span", { class: "muted small" }, `Page ${pageIx + 1} of ${tiers.length}`), el("button", { class: "btn sm ghost", disabled: pageIx === tiers.length - 1, onclick: () => { pageIx++; draw(); } }, "Next →"))));
+    }
+    function slot(b, unlocked) {
+      const has = owned.has(b.key);
+      const sl = el("div", { class: "bm-slot" + (has ? " has" : unlocked ? " open" : " far"), title: has ? b.name + " · click to put it in a book" : b.how ? b.how : unlocked ? b.name + " · pick it after your next " + TIER_NAMES[b.tier].toLowerCase() + " goal" : "Finish more goals to unlock this design" },
+        has ? bookmarkEl(b, "sm") : el("div", { class: "bm-ghost" }, unlocked ? "?" : "🔒"), el("small", {}, has ? b.name : b.how ? b.name : "?"));
+      if (has) sl.addEventListener("click", () => useBookmark(b));
+      return sl;
+    }
+    function useBookmark(b) {
+      const rb = readingBooks(); if (!rb.length) { toast("Start reading a book on your list first, then set this bookmark in it."); return; }
+      const menu = el("div", { class: "crop-panel", style: "max-width:420px" }, el("h2", {}, "Put " + b.name + " in…"), ...rb.map(x => el("button", { class: "btn", style: "display:flex;width:100%;margin-top:8px;justify-content:flex-start", onclick: async () => { x.bookmark = b.key; await saveProfile({ tbr: me.tbr }); m2.remove(); overlay.remove(); toast(`🔖 ${b.name} is in "${x.title}"`); if (typeof window.__redrawTbr === "function") window.__redrawTbr(); } }, x.title)), el("button", { class: "btn ghost", style: "margin-top:10px", onclick: () => m2.remove() }, "Cancel"));
+      const m2 = el("div", { class: "crop-overlay", onclick: (e) => { if (e.target === m2) m2.remove(); } }, menu); document.body.append(m2);
+    }
+    fill(overlay, el("div", { class: "bm-book-wrap" }, book, el("button", { class: "icon-btn bm-close", onclick: () => overlay.remove() }, "✕"))); document.body.append(overlay); draw();
+  }
 
   // ---------- state & helpers ----------
   let sb = null, session = null, me = null, friends = [], pendingIn = [], pendingOut = [], notices = [];
@@ -294,6 +421,7 @@
       visits: st.visits || 0, visitStreak: st.visit_streak || 0, freshMonths: (st.fresh_months || []).length,
       finished: booksRead(p), notes: st.notes_written || 0, quotes: st.quotes_written || 0,
       tbr: (p.tbr || []).length, checkins: st.checkins || 0, readStreak: st.read_streak_best || 0,
+      goalsDone: (p.goals || []).filter(g => g.done).length, hardGoals: (p.goals || []).filter(g => g.done && g.level === "hard").length, bookmarks: (st.bookmarks || []).length,
       phoenix: (p.pets || []).some(x => x.type === "phoenix") ? 1 : 0,
       photo: p.photo_url ? 1 : 0, banner: p.banner && p.banner !== "plain" ? 1 : 0, pet: (p.pets && p.pets.length) || p.pet ? 1 : 0, tagline: p.tagline ? 1 : 0,
       months,
@@ -1030,6 +1158,31 @@
       t.value = ""; a.value = ""; pendingFile = pendingCover = null; picBtn.textContent = "📷"; picBtn.classList.remove("has-pic"); contentSel.value = ""; setKind("book");
       await save("Added. Nice one."); } },
       twrap, a, el("div", { class: "row", style: "gap:6px;flex-wrap:wrap" }, d, kindBtn, contentSel, picBtn, addBtn));
+    // ----- Goals (earn bookmarks) -----
+    const goals = me.goals || (me.goals = []);
+    const goalsBox = el("div", { class: "card" });
+    async function finishGoal(g) {
+      g.done = true; g.doneAt = new Date().toISOString(); award(GOAL_LEVELS[g.level].reward);
+      const ap = me.pet && myPets().find(z => z.id === me.pet.id); if (ap) { ap.xp = (ap.xp || 0) + (g.level === "hard" ? 40 : g.level === "medium" ? 20 : 10); setActivePet(ap.id); }
+      const before = new Set(myBookmarks()); const legends = legendUnlocks(me.goals).filter(k => !before.has(k)); legends.forEach(k => myBookmarks().push(k));
+      await saveProfile({ goals: me.goals, stats: me.stats, pet: me.pet, pets: myPets() }); updateTopbar();
+      legends.forEach(k => toast(`🏆 Legendary bookmark: ${BOOKMARK_BY[k].name}`, "badge-toast"));
+      pickBookmark(g.level, () => drawGoals());
+      drawGoals();
+    }
+    function drawGoals() {
+      const open = goals.filter(g => !g.done), done = goals.filter(g => g.done).slice(-6).reverse(); const nBm = myBookmarks().length;
+      const txt = el("input", { class: "input", placeholder: "e.g. Finish two books this month, read 20 minutes a day, try a new genre" }); const lvl = el("select", { class: "input", style: "width:auto" }, ...Object.entries(GOAL_LEVELS).map(([k, v]) => el("option", { value: k }, v.name)));
+      fill(goalsBox,
+        el("div", { class: "row", style: "justify-content:space-between;align-items:flex-start;gap:12px" }, el("div", {}, el("div", { class: "eyebrow" }, "Goals & bookmarks"), el("h2", {}, open.length ? `${open.length} open goal${open.length > 1 ? "s" : ""}` : "Set a goal")), el("button", { class: "btn sm", onclick: openBookmarkBook }, `📖 My bookmarks · ${nBm}`)),
+        el("p", { class: "muted small" }, "Set your own reading goals and mark them easy, medium, or difficult. Finishing one pays coins and XP and lets you pick a bookmark. Bookmarks only come from goals. Difficult ones glow."),
+        ...open.map(g => el("div", { class: "goal-row" }, el("span", { class: "goal-lvl " + g.level }, GOAL_LEVELS[g.level].name), el("span", { class: "goal-text" }, g.text),
+          el("div", { class: "row", style: "gap:4px;margin-left:auto" }, el("button", { class: "btn sm primary", onclick: () => finishGoal(g) }, "Done ✓"), el("button", { class: "icon-btn", title: "Remove", onclick: async () => { goals.splice(goals.indexOf(g), 1); await saveProfile({ goals: me.goals }); drawGoals(); } }, "✕")))),
+        el("form", { class: "row", style: "margin-top:10px;flex-wrap:wrap", onsubmit: async (e) => { e.preventDefault(); if (!txt.value.trim()) return; goals.push({ id: uid(), text: txt.value.trim().slice(0, 120), level: lvl.value, done: false, created: new Date().toISOString() }); await saveProfile({ goals: me.goals }); drawGoals(); } }, el("div", { style: "flex:1;min-width:220px" }, txt), lvl, el("button", { class: "btn sm", type: "submit" }, "Add goal")),
+        done.length ? el("div", { style: "margin-top:12px" }, el("div", { class: "eyebrow" }, "Finished"), ...done.map(g => el("div", { class: "goal-row done" }, el("span", { class: "goal-lvl " + g.level }, GOAL_LEVELS[g.level].name), el("span", { class: "goal-text" }, g.text), el("span", { class: "muted small", style: "margin-left:auto" }, new Date(g.doneAt).toLocaleDateString())))) : null);
+    }
+    drawGoals();
+
     // ----- To Be Read + reading now -----
     const tbr = me.tbr || (me.tbr = []);
     const tbrBox = el("div", { class: "card" });
@@ -1041,10 +1194,11 @@
       const w2 = el("div", { class: "suggest-wrap" }, t2); attachSuggest(t2, (hit) => { t2.value = hit.title; if (hit.author && !a2.value) a2.value = hit.author; });
       const row = (x) => el("li", { class: "book log-row tbr-row" + (x.reading ? " reading" : "") },
         el("span", { class: "log-date" }, x.reading ? "NOW" : "NEXT"),
-        coverEl(x, true, (url) => { x.cover = url; saveTbr(); }),
+        el("span", { class: "cover-wrap" }, coverEl(x, true, (url) => { x.cover = url; saveTbr(); }), x.reading && x.bookmark && BOOKMARK_BY[x.bookmark] ? bookmarkEl(BOOKMARK_BY[x.bookmark], "xs") : null),
         el("div", { class: "bmeta" }, el("div", { class: "title" }, x.title), el("div", { class: "author" }, x.author || ""),
           x.reading ? el("div", { class: "prog-row" }, el("input", { type: "range", min: 0, max: 100, step: 5, value: x.progress || 0, class: "prog", onchange: async (e) => { x.progress = +e.target.value; if (st.last_progress_day !== today) { st.last_progress_day = today; award("progress"); } await saveProfile({ tbr: me.tbr, stats: st }); drawTbr(); } }), el("span", { class: "prog-pct" }, (x.progress || 0) + "%")) : null),
         el("div", { class: "tools" },
+          x.reading ? el("button", { class: "icon-btn", title: x.bookmark ? "Change bookmark" : "Set a bookmark in this book", onclick: () => { const own = myBookmarks(); if (!own.length) { toast("Finish a goal to earn your first bookmark."); return; } const m = el("div", { class: "crop-overlay", onclick: (e) => { if (e.target === m) m.remove(); } }, el("div", { class: "crop-panel" }, el("h2", {}, "Bookmark for " + x.title), el("div", { class: "bm-choices" }, ...own.map(k => BOOKMARK_BY[k]).filter(Boolean).map(b => el("button", { class: "bm-choice" + (x.bookmark === b.key ? " on" : ""), onclick: async () => { x.bookmark = b.key; await saveProfile({ tbr: me.tbr }); m.remove(); drawTbr(); } }, bookmarkEl(b, "md"), el("b", {}, b.name))), x.bookmark ? el("button", { class: "bm-choice", onclick: async () => { delete x.bookmark; await saveProfile({ tbr: me.tbr }); m.remove(); drawTbr(); } }, el("div", { class: "bm-ghost" }, "—"), el("b", {}, "None")) : null))); document.body.append(m); } }, "🔖") : null,
           x.reading ? el("button", { class: "btn sm primary", onclick: async () => { const i = tbr.indexOf(x); tbr.splice(i, 1); (me.reading_log = me.reading_log || []).push({ id: uid(), title: x.title, author: x.author || "", kind: x.kind || "book", content: x.content, spice: x.spice, violence: x.violence, finished: today, cover: x.cover }); award("finish"); const ap = me.pet && myPets().find(z => z.id === me.pet.id); if (ap) { ap.xp = (ap.xp || 0) + 15; setActivePet(ap.id); } await saveProfile({ tbr: me.tbr, reading_log: me.reading_log, pet: me.pet, pets: myPets() }); toast("Finished! Added to " + today.slice(0, 4) + "."); drawAll(); drawTbr(); if (titleIndex) loadTitles(); } }, "Finished it ✓") : el("button", { class: "btn sm", onclick: () => { x.reading = true; x.progress = x.progress || 0; saveTbr("Reading now. Slide the bar as you go."); } }, "Start reading"),
           el("button", { class: "icon-btn", title: "Quotes, notes and journal", onclick: () => openNotes(x.title, x.author) }, "📝"),
           el("button", { class: "icon-btn", title: "Remove", onclick: () => { tbr.splice(tbr.indexOf(x), 1); saveTbr("Removed."); } }, "✕")));
@@ -1056,9 +1210,9 @@
         (reading.length || queue.length) ? el("ul", { class: "books" }, ...reading.map(row), ...queue.map(row)) : el("div", { class: "empty-books" }, "Nothing lined up. Add the next book you want to read."),
         el("form", { class: "add-book", style: "border-top:none;padding:10px 0 0", onsubmit: (e) => { e.preventDefault(); if (!t2.value.trim()) return; tbr.push({ id: uid(), title: t2.value.trim(), author: a2.value.trim(), kind: "book", progress: 0, reading: false, added: today }); saveTbr("Added to your list."); } }, w2, a2, el("button", { class: "btn sm", type: "submit" }, "Add to list")));
     }
-    drawTbr();
+    drawTbr(); window.__redrawTbr = drawTbr;
     page.append(el("div", { class: "page-head" }, el("div", {}, el("div", { class: "eyebrow" }, "Reading record"), el("h1", {}, "My Books"), el("p", { class: "sub" }, "What you're reading, what's next, and every book you finish, kept by year. Tap 📝 on any book for quotes, notes, thoughts and journal entries. Each entry is private unless you make it public."))),
-      tbrBox, stats, tabs, listBox, el("div", { class: "card" }, el("div", { class: "eyebrow" }, "Finished a book you didn't list?"), el("div", { style: "height:8px" }), form));
+      tbrBox, goalsBox, stats, tabs, listBox, el("div", { class: "card" }, el("div", { class: "eyebrow" }, "Finished a book you didn't list?"), el("div", { style: "height:8px" }), form));
     drawAll(); return page;
   }
 
