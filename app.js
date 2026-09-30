@@ -782,7 +782,8 @@
       const agree = el("input", { type: "checkbox", id: "agree" });
       const form = el("form", { onsubmit: async (e) => {
         e.preventDefault(); err.textContent = ""; const b = form.querySelector("button[type=submit]"); b.disabled = true;
-        try { if (mode === "login") await signIn(user.value, pass.value); else await signUp(user.value, pass.value, name.value, agree.checked); me = null; location.hash = "#/shelf"; await render(); }
+        try { if (mode === "login") await signIn(user.value, pass.value); else await signUp(user.value, pass.value, name.value, agree.checked); me = null; location.hash = "#/shelf"; await render();
+          if (mode === "signup") toast(`👋 Welcome to Shelfmates, ${name.value.trim() || user.value.trim()}!`, "badge-toast"); }
         catch (ex) { err.textContent = ex.message; b.disabled = false; }
       } },
         el("div", { class: "field" }, el("label", {}, "Username"), user),
