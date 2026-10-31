@@ -1,10 +1,10 @@
 # Keeps the free Supabase database from being paused for inactivity.
-# Runs by itself every 3 days. Nothing to do by hand.
+# Runs by itself every day. Nothing to do by hand.
 name: Keep database awake
 
 on:
   schedule:
-    - cron: "17 15 */3 * *"
+    - cron: "17 15 * * *"
   workflow_dispatch:
 
 permissions:
@@ -23,6 +23,9 @@ jobs:
             curl -sS -o /dev/null -w "$t %{http_code}\n" "$URL/rest/v1/$t?select=id&limit=1" \
               -H "apikey: $KEY" -H "Authorization: Bearer $KEY"
           done
+          # A real database write each day (Supabase counts reads alone as too little activity)
+          curl -sS -f -X POST "$URL/rest/v1/rpc/keepalive_ping" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d '{}'
 
       - uses: actions/checkout@v4
 
